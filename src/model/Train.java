@@ -1,7 +1,7 @@
 package model;
 
 public class Train {
-    private String id;
+    final private String id;
     private String name;
     private TrainType type;
     private TrainPriority priority;
@@ -10,9 +10,6 @@ public class Train {
     private String startNode;
     private String endNode;
     private double speed;
-
-    public Train() {
-    }
 
     public Train(
         String id,
@@ -35,4 +32,43 @@ public class Train {
         this.endNode = endNode;
         this.speed = speed;
     }
+
+    public String getId() {
+        return this.id;
+    }
+
+    public String getName() {
+        return this.name;
+    }
+
+    public TrainType getType() {
+        return this.type;
+    }
+
+    public TrainPriority getPriority() {
+        return this.priority;
+    }
+
+    public String getTrackOnUse() {
+        return this.trackOnUse;
+    }
+    public Direction getDirection() {
+        return this.direction;
+    }
+
+    public String getStartNode() {
+        return this.startNode;
+    }
+
+    public String getEndNode() {
+        return this.endNode;
+    }
+
+    public double getSpeed() {
+        return this.speed;
+    }
+
+
+
+
 }

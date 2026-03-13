@@ -4,8 +4,6 @@ public class StationNode extends Node {
     private String stationCode;
     private int platformCount;
 
-    public StationNode() {
-    }
 
     public StationNode(String id, String name, String stationCode, int platformCount) {
         super(id, name);

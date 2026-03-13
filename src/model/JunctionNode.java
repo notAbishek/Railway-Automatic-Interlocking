@@ -3,12 +3,8 @@ package model;
 public class JunctionNode extends Node {
     private String primaryNode;
     private String secondaryNode;
-    private boolean state;
+    private boolean state = false;
     private JunctionDirection direction;
-
-    public JunctionNode() {
-        this.state = false;
-    }
 
     public JunctionNode(
         String id,

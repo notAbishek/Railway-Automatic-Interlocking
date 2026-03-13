@@ -1,11 +1,8 @@
 package model;
 
 public abstract class Node {
-    protected String id;
-    protected String name;
-
-    public Node() {
-    }
+    final protected String id;
+    final protected String name;
 
     public Node(String id, String name) {
         this.id = id;
@@ -13,10 +10,10 @@ public abstract class Node {
     }
 
     public String getId() {
-        return id;
+        return this.id;
     }
 
     public String getName() {
-        return name;
+        return this.name;
     }
 }
