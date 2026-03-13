@@ -1,5 +1,8 @@
 package model;
 
+import enums.Direction;
+import enums.TrainType;
+
 public class Train {
     final private String id;
     private String name;

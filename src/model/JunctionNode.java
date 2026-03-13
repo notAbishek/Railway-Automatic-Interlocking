@@ -1,5 +1,7 @@
 package model;
 
+import enums.JunctionDirection;
+
 public class JunctionNode extends Node {
     private String primaryNode;
     private String secondaryNode;

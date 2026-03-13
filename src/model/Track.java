@@ -1,5 +1,6 @@
 package model;
 
+import enums.Direction;
 import java.util.ArrayList;
 import java.util.List;
 

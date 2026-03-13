@@ -210,31 +210,59 @@ Track {
 ```
 interlocking/
 ├── src/
-│   ├── model/
-│   │   ├── Node.java                 # abstract base
-│   │   ├── SignalNode.java            # RED|YELLOW|DOUBLE_YELLOW|GREEN
-│   │   ├── JunctionNode.java          # state + direction + primary/secondary
-│   │   ├── StationNode.java           # stationCode + platformCount
-│   │   ├── Track.java                 # startNode, endNode, usedBy List
-│   │   ├── Train.java                 # type, priority, direction, speed
-│   │   ├── SignalState.java           # enum
-│   │   ├── TrainType.java             # enum
-│   │   ├── TrainPriority.java         # enum
-│   │   ├── JunctionDirection.java     # enum
-│   │   └── Direction.java             # RIGHT | LEFT
-│   ├── core/
-│   │   ├── GraphBuilder.java          # adjacency list
-│   │   ├── PathFinder.java            # Dijkstra
-│   │   ├── Dispatcher.java            # PriorityQueue
-│   │   └── ConflictDetector.java      # usedBy + cycle detection
-│   ├── signal/
-│   │   └── SignalController.java      # manages signal state transitions
-│   ├── db/
-│   │   └── DatabaseLayer.java         # PostgreSQL CRUD
-│   └── Main.java
-├── schema.sql
-├── LICENSE
-└── README.md
+│   │
+│   ├── model/                          ← Domain objects (what exists)
+│   │   ├── Node.java                   ← abstract base: id, name
+│   │   ├── SignalNode.java             ← extends Node: state, facing
+│   │   ├── JunctionNode.java           ← extends Node: state, direction, primaryNode, secondaryNode
+│   │   ├── StationNode.java            ← extends Node: stationCode, platformCount
+│   │   ├── Track.java                  ← id, name, startNode, endNode, distance, inUse, usedBy, occupiedDirection
+│   │   ├── Train.java                  ← id, name, type, direction, startNode, endNode, speed, priority, departureTime
+│   │   └── TrackInterval.java          ← trainId, trackId, enterTime, exitTime, direction (NEW)
+│   │
+│   ├── enums/                          ← All enums separated cleanly
+│   │   ├── SignalState.java            ← RED, YELLOW, DOUBLE_YELLOW, GREEN
+│   │   ├── SignalFacing.java           ← RIGHT, LEFT
+│   │   ├── Direction.java              ← RIGHT, LEFT
+│   │   ├── JunctionState.java          ← PRIMARY (false), SECONDARY (true)
+│   │   ├── TrainType.java              ← EMU, ENGINE, GOODS, PASSENGER
+│   │   └── Priority.java              ← EXPRESS, PASSENGER, GOODS, LOCAL
+│   │
+│   ├── core/                           ← Algorithm engine (what happens)
+│   │   ├── GraphBuilder.java           ← HashMap<String, List<Track>> adjacency list
+│   │   ├── PathFinder.java             ← Dijkstra (EXPRESS/PASSENGER) + Bellman-Ford (GOODS/LOCAL)
+│   │   ├── Dispatcher.java             ← Priority Queue: sort by departureTime then Priority
+│   │   ├── ConflictDetector.java       ← orchestrates all conflict detection
+│   │   │
+│   │   └── conflict/                   ← Conflict sub-modules (NEW)
+│   │       ├── TimeWindowConflict.java ← hasTimeConflict(), getConflictWindow() — interval overlap
+│   │       ├── HeadOnConflict.java     ← opposite direction on same track detection
+│   │       ├── FollowingConflict.java  ← same direction, one train behind another
+│   │       └── DeadlockDetector.java   ← cycle detection (two HashSets: currentPath + visited)
+│   │
+│   ├── signal/                         ← Signal control layer
+│   │   ├── SignalController.java       ← sets RED/GREEN/YELLOW based on ConflictDetector result
+│   │   └── SignalRule.java             ← fail-safe rules: default RED, GREEN conditions
+│   │
+│   ├── scheduler/                      ← Pre-dispatch scheduling (NEW)
+│   │   ├── TrainScheduler.java         ← scheduleAndResolve(): runs before any train departs
+│   │   ├── IntervalBuilder.java        ← computeIntervals(): builds TrackInterval list per train
+│   │   └── MeetAndPassResolver.java    ← delays lower priority train, resolves time window conflicts
+│   │
+│   ├── db/                             ← Database layer
+│   │   ├── DatabaseLayer.java          ← PostgreSQL CRUD
+│   │   └── schema.sql                  ← 3NF schema: stations, trains, tracks, reservations
+│   │
+│   └── Main.java                       ← Entry point
+│
+├── test/                               ← Unit tests (add when core is done)
+│   ├── GraphBuilderTest.java
+│   ├── PathFinderTest.java
+│   ├── ConflictDetectorTest.java
+│   └── SchedulerTest.java
+│
+├── README.md
+└── LICENSE
 ```
 
 ---

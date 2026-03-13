@@ -1,5 +1,7 @@
 package model;
 
+import enums.Facing;
+
 public class SignalNode extends Node {
     private SignalState state = SignalState.RED;
     final private Facing facing;
