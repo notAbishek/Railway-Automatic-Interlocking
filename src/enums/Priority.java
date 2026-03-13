@@ -1,5 +1,7 @@
 package enums;
 
-public class Priority {
-    
+public enum Priority {
+    HIGH,
+    MEDIUM,
+    LOW
 }

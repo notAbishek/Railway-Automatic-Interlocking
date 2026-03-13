@@ -1,8 +1,15 @@
-# Railway Automatic Interlocking
+# Railway Automatic Interlocking (Under Development)
 > An algorithm-driven railway traffic management system that automatically dispatches trains,
 > detects conflicts, prevents deadlocks, and controls signals — without human intervention.
 
 ---
+
+## Compiling and Executing
+Compile:
+``` javac -d out -sourcepath src src\Main.java ```
+
+Run:
+``` java -cp out Main ```
 
 ## Architecture
 
@@ -495,6 +502,8 @@ MIT License — see [LICENSE](LICENSE) for details.
 ---
 
 ## Author
-
 **Abishek Ganesh B S**
-[GitHub](https://github.com/notAbishek) · Chennai, Tamil Nadu
+[GitHub](https://github.com/notAbishek)
+
+
+

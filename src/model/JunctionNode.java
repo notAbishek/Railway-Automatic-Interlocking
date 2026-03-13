@@ -22,4 +22,21 @@ public class JunctionNode extends Node {
         this.state = state;
         this.direction = direction;
     }
+
+    public String getPrimaryNode() {
+        return primaryNode;
+    }
+
+    public String getSecondaryNode() {
+        return secondaryNode;
+    }
+
+    public boolean getState() {
+        return state;
+    }
+
+    public JunctionDirection getDirection() {
+        return direction;
+    }
+
 }

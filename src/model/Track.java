@@ -19,13 +19,13 @@ public class Track {
         this.usedBy = new ArrayList<>();
     }
 
-    public Track(String id, String name, Node startNode, Node endNode, int distance, Direction occupiedDirection) {
+    public Track(String id, String name, Node startNode, Node endNode, int distance) {
         this.id = id;
         this.name = name;
         this.startNode = startNode;
         this.endNode = endNode;
         this.distance = distance;
-        this.occupiedDirection = occupiedDirection;
+        this.occupiedDirection = null; 
         this.inUse = false;
         this.usedBy = new ArrayList<>();
     }

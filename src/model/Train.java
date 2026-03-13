@@ -12,28 +12,24 @@ public class Train {
     private Direction direction;
     private String startNode;
     private String endNode;
-    private double speed;
+    private double speed = 0;
 
     public Train(
         String id,
         String name,
         TrainType type,
         TrainPriority priority,
-        String trackOnUse,
         Direction direction,
         String startNode,
-        String endNode,
-        double speed
+        String endNode
     ) {
         this.id = id;
         this.name = name;
         this.type = type;
         this.priority = priority;
-        this.trackOnUse = trackOnUse;
         this.direction = direction;
         this.startNode = startNode;
         this.endNode = endNode;
-        this.speed = speed;
     }
 
     public String getId() {
