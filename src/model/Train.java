@@ -1,11 +1,10 @@
-// Train.java — add speed, departureTime, arrivalTime only
 package model;
 
 import enums.*;
 import java.time.LocalDateTime;
 
 public class Train {
-    final private String id;
+    private String id;
     private String name;
     private TrainType type;
     private TrainPriority priority;
@@ -16,6 +15,8 @@ public class Train {
     private double speed;
     private LocalDateTime departureTime;
     private LocalDateTime arrivalTime;
+    private LocalDateTime actualArrivalTime;
+    private double        delayHours;
 
     public Train(
         String id,
@@ -54,8 +55,25 @@ public class Train {
     public double        getSpeed()         { return this.speed; }
     public LocalDateTime getDepartureTime() { return this.departureTime; }
     public LocalDateTime getArrivalTime()   { return this.arrivalTime; }
+    public LocalDateTime getActualArrivalTime() { return this.actualArrivalTime; }
+    public double        getDelayHours()    { return this.delayHours; }
 
     public void setDepartureTime(LocalDateTime departureTime) {
         this.departureTime = departureTime;
     }
+
+    public void setActualArrivalTime(LocalDateTime actualArrival) {
+        this.actualArrivalTime = actualArrival;
+
+        // Calculate delay against planner's scheduled arrivalTime
+        if (this.arrivalTime != null && actualArrival.isAfter(this.arrivalTime)) {
+            long delaySeconds = java.time.Duration.between(
+                this.arrivalTime, actualArrival).getSeconds();
+            this.delayHours = delaySeconds / 3600.0;
+        } else {
+            this.delayHours = 0;
+        }
+    }
+
+    
 }

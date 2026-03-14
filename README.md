@@ -1,76 +1,82 @@
-# Railway Automatic Interlocking (Under Development)
+# Railway Automatic Interlocking (Under Devlopement)
 > An algorithm-driven railway traffic management system that automatically dispatches trains,
 > detects conflicts, prevents deadlocks, and controls signals — without human intervention.
 
 ---
 
 ## Compiling and Executing
-Compile:
-``` javac -d out -sourcepath src src\Main.java ```
 
-Run:
-``` java -cp out Main ```
+```bash
+javac -d out -sourcepath src src\Main.java
+java -cp out Main
+```
+
+---
 
 ## Architecture
 
 ```
-                        ARCHITECTURE
-                        ===============
-
   ┌──────────────────────────────────────────────────────────────┐
   │                        INPUT LAYER                            │
   │                                                               │
-  │   Train(id, name, type, priority, speed,                      │
-  │         direction, startNode, endNode, departureTime)         │
-  │   Track(id, name, startNode, endNode, distance)               │
+  │   Train(id, name, type, priority, trackOnUse, direction,      │
+  │         startNode, endNode, speed, departureTime,             │
+  │         arrivalTime)                                          │
+  │   Track(id, name, startNode, endNode, distance,               │
+  │         minSpeedLimit, maxSpeedLimit)                         │
   └──────────────────┬────────────────────────────────────────────┘
                      │
                      ▼
   ┌──────────────────────────────────────────────────────────────┐
-  │                     SCHEDULER (Pre-Dispatch)                  │
+  │                  SCHEDULER (Pre-Dispatch)                     │
   │                                                               │
-  │   Runs BEFORE any train departs.                              │
-  │   Computes all TrackIntervals using PathFinder.               │
-  │   Detects time-window conflicts (Meet and Pass).              │
-  │   Delays lower priority train at source — not mid-route.      │
+  │   IntervalBuilder   → PathFinder for every train upfront      │
+  │                        builds TrackInterval per track         │
+  │                        sets actualArrivalTime + delayHours    │
+  │                                                               │
+  │   DependencyResolver → same direction blocking detection      │
+  │                         Topological Sort → correct order      │
+  │                                                               │
+  │   MeetAndPassResolver → opposite direction time window        │
+  │                          delays lower priority at source      │
   └──────────────────┬────────────────────────────────────────────┘
                      │
                      ▼
   ┌──────────────────────────────────────────────────────────────┐
   │                      CORE ENGINE                              │
   │                                                               │
-  │   ┌──────────────┐      ┌───────────────┐                    │
-  │   │  Dispatcher  │      │  PathFinder   │                    │
-  │   │              │─────▶│               │                    │
-  │   │ PriorityQueue│      │  Dijkstra     │                    │
-  │   │              │      │  (EXPRESS /   │                    │
-  │   │ Sort rule:   │      │   PASSENGER)  │                    │
-  │   │ 1. dep time  │      │               │                    │
-  │   │ 2. priority  │      │  Bellman-Ford │                    │
-  │   │    (tiebreak │      │  (GOODS /     │                    │
-  │   │    only)     │      │   LOCAL)      │                    │
-  │   └──────────────┘      └──────┬────────┘                    │
-  │                                ▼                             │
-  │                   ┌─────────────────────┐                    │
-  │                   │  ConflictDetector   │                    │
-  │                   │                     │                    │
-  │                   │  Track.usedBy list  │                    │
-  │                   │  + Cycle Detection  │                    │
-  │                   │  + Direction Check  │                    │
-  │                   │  + Time Window      │                    │
-  │                   └──────────┬──────────┘                    │
-  └──────────────────────────────┼───────────────────────────────┘
-                                 │
-                                 ▼
+  │   ┌──────────────────┐    ┌──────────────────────┐           │
+  │   │    Dispatcher    │    │      PathFinder       │           │
+  │   │                  │───▶│                       │           │
+  │   │  PriorityQueue   │    │  Dijkstra             │           │
+  │   │                  │    │  (EXPRESS /           │           │
+  │   │  Sort:           │    │   PASSENGER_EXP)      │           │
+  │   │  1. departureTime│    │                       │           │
+  │   │  2. priority     │    │  Bellman-Ford         │           │
+  │   │  3. trainType    │    │  (GOODS / LOCAL)      │           │
+  │   │  4. id           │    │  K = junction limit   │           │
+  │   └──────────────────┘    └──────────┬────────────┘           │
+  │                                      ▼                        │
+  │                        ┌─────────────────────┐               │
+  │                        │   ConflictDetector  │               │
+  │                        │                     │               │
+  │                        │  Track.usedBy list  │               │
+  │                        │  Direction check    │               │
+  │                        │  Cycle detection    │               │
+  │                        │  Time window check  │               │
+  │                        └──────────┬──────────┘               │
+  └───────────────────────────────────┼────────────────────────── ┘
+                                      │
+                                      ▼
   ┌──────────────────────────────────────────────────────────────┐
   │                    SIGNAL CONTROLLER                          │
   │                                                               │
-  │   Default state = RED (fail-safe)                             │
+  │   Default state = RED (fail-safe, always)                     │
   │   States: RED → YELLOW → DOUBLE_YELLOW → GREEN               │
   │                                                               │
   │   Set GREEN only when:                                        │
-  │     1. Track.inUse == false                                   │
-  │     2. Track.usedBy list is empty                             │
+  │     1. track.inUse == false                                   │
+  │     2. track.usedBy list is empty                             │
   │     3. No cycle in reservation graph                          │
   │     4. Opposite direction track is clear                      │
   └──────────────────┬────────────────────────────────────────────┘
@@ -105,41 +111,63 @@ Node (abstract)
 │          RIGHT = two tracks merge into one  →
 │          LEFT  = one track splits into two  ←
 │
-└── StationNode
-        stationCode    : String   (e.g. "MAS")
-        platformCount  : int
+├── StationNode
+│       stationCode    : String   (e.g. "MAS")
+│       platformCount  : int
+│
+└── OriginNode
+        virtual spawn node — gives train a valid position before
+        it enters the first real signal node.
+        connected to first signal via a spawn track (distance = 0)
 
 
 Track
-│   id                  : String
-│   name                : String
-│   startNode           : Node ID
-│   endNode             : Node ID
-│   distance            : int (metres)
-│   inUse               : boolean (default false)
-│   usedBy              : List<String>  (Train IDs currently on this track)
-│   occupiedDirection   : Direction     (which way current train is moving)
+    id                  : String
+    name                : String
+    startNode           : Node
+    endNode             : Node
+    distance            : int    (metres)
+    minSpeedLimit       : double (metres/second — slowest allowed, used for interval calculation)
+    maxSpeedLimit       : double (metres/second — fastest allowed, safety ceiling)
+    inUse               : boolean (default false)
+    usedBy              : List<String>  (Train IDs on this track)
+    occupiedDirection   : Direction     (set on reserve, null when free)
+
+    reserve(trainId, direction) → sets inUse, adds to usedBy
+    release(trainId)            → removes from usedBy, clears when empty
 
 
 Train
-    id              : String
-    name            : String
-    type            : EMU | ENGINE | GOODS | PASSENGER
-    priority        : EXPRESS | PASSENGER_EXP | GOODS | LOCAL
-    trackOnUse      : Track ID
-    direction       : RIGHT | LEFT
-    startNode       : Node ID
-    endNode         : Node ID
-    speed           : double (metres/second)
-    departureTime   : int    (seconds from simulation start)
+    id                  : String
+    name                : String
+    type                : EMU | ENGINE | GOODS | PASSENGER
+    priority            : EXPRESS | PASSENGER_EXP | GOODS | LOCAL
+    trackOnUse          : Track ID  (null when not moving)
+    direction           : RIGHT | LEFT
+    startNode           : Node ID
+    endNode             : Node ID
+    speed               : double  (current speed, 0 at station)
+    departureTime       : LocalDateTime  (format: dd-MM-yyyy HH:mm:ss)
+    arrivalTime         : LocalDateTime  (planned — set by station planner)
+    actualArrivalTime   : LocalDateTime  (calculated by IntervalBuilder)
+    delayHours          : double  (0 if on time, positive if late)
+
+    setTrackOnUse(trackId)     → called by ConflictDetector on entry
+    clearTrackOnUse()          → called by ConflictDetector on exit
+    setActualArrivalTime(time) → called by IntervalBuilder, computes delayHours
 
 
 TrackInterval
     trainId     : String
     trackId     : String
-    enterTime   : int     (seconds)
-    exitTime    : int     (enterTime + distance / speed)
+    enterTime   : LocalDateTime
+    exitTime    : LocalDateTime
     direction   : Direction
+
+    conflictsWith(other)     → opposite direction + time overlap = true
+    getConflictWindow(other) → [conflictStart, conflictEnd]
+    delay(Duration)          → pushes enterTime and exitTime forward
+    getOccupancyDuration()   → Duration between enter and exit
 ```
 
 ---
@@ -148,53 +176,25 @@ TrackInterval
 
 ```
 Rule:
-  Primary sort   → departureTime   (earliest departs first, always)
-  Secondary sort → priority        (tiebreaker ONLY when times are equal)
+  1. departureTime  → earliest departs first (always)
+  2. priority       → tiebreaker when times are equal
+  3. trainType      → tiebreaker when priority is also equal
+  4. id             → final tiebreaker (alphabetical)
 
-Why:
-  A LOCAL train departing at 08:00 must go before an EXPRESS
-  departing at 20:00. Time governs, priority only breaks ties.
+Why time is first, not priority:
+  A LOCAL train at 08:00 must go before an EXPRESS at 20:00.
+  Priority only matters when two trains compete for the same slot.
 
 Example:
-  Train A — LOCAL,   departs 08:00  → dispatched 1st
-  Train B — EXPRESS, departs 08:00  → dispatched 2nd  (same time, priority wins)
-  Train C — EXPRESS, departs 20:00  → dispatched 3rd
+  Train A — LOCAL,   08:00 → dispatched 1st  (earliest time)
+  Train B — EXPRESS, 08:00 → dispatched 2nd  (same time, priority wins)
+  Train C — EXPRESS, 20:00 → dispatched 3rd  (later time, goes last)
 
-Wrong approach (priority first):
-  Train B → Train C → Train A       ← LOCAL at 08:00 stuck behind 20:00 EXPRESS
+Wrong (priority first):
+  B → C → A   ← LOCAL at 08:00 stuck behind 20:00 EXPRESS
 
-Correct approach (time first):
-  Train A → Train B → Train C       ← always correct
-
-In code:
-  PriorityQueue sorted by:
-    1. train.departureTime  (ascending)
-    2. train.priority.ordinal() (ascending, lower ordinal = higher priority)
-```
-
----
-
-## Junction Explained
-
-```
-Direction: RIGHT — two tracks merge into one
-
-    Track A ──→ ╮
-                 JCT ──→ continues
-    Track B ──→ ╯
-
-    state = false → train routes via primaryNode (Track A)
-    state = true  → train routes via secondaryNode (Track B)
-
-
-Direction: LEFT — one track splits into two
-
-                 ╭──→ Track A
-    continues ──→ JCT
-                 ╰──→ Track B
-
-    state = false → train exits via primaryNode (Track A)
-    state = true  → train exits via secondaryNode (Track B)
+Correct (time first):
+  A → B → C
 ```
 
 ---
@@ -205,73 +205,191 @@ Direction: LEFT — one track splits into two
 RED           → Stop. Do not pass.
 YELLOW        → Caution. Next signal is RED.
 DOUBLE YELLOW → Attention. Next signal is YELLOW.
-GREEN         → Proceed at full speed.
+GREEN         → Proceed. Speed must stay within [minSpeedLimit, maxSpeedLimit].
+```
+
+Signal facing:
+```
+SignalNode.facing = RIGHT → controls trains moving RIGHT (→)
+SignalNode.facing = LEFT  → controls trains moving LEFT  (←)
+A signal only applies to a train whose direction matches its facing.
+```
+
+---
+
+## Junction Explained
+
+```
+Direction RIGHT — two tracks merge into one:
+
+    Track A ──→ ╮
+                 JCT ──→ continues
+    Track B ──→ ╯
+
+    state = false → routes via primaryNode (Track A)
+    state = true  → routes via secondaryNode (Track B)
+
+
+Direction LEFT — one track splits into two:
+
+                 ╭──→ Track A
+    continues ──→ JCT
+                 ╰──→ Track B
+
+    state = false → exits via primaryNode (Track A)
+    state = true  → exits via secondaryNode (Track B)
+
+No tertiary node needed — outgoing connection is a Track
+in the adjacency list, not stored on the Junction.
+```
+
+---
+
+## Origin Node and Spawn Track
+
+```
+Every train starts on a virtual spawn track before entering the graph.
+
+  [ORIGIN] ──[T0, distance=0]── S1 ──[T1]── S2 ── ...
+
+  OriginNode  → virtual, type ORIGIN, one per train
+  Spawn Track → distance=0, speedLimit=any, gives valid trackOnUse
+  PathFinder  → starts from train.startNode (S1), ignores ORIGIN
+  T0 interval → enterTime = exitTime = departureTime (no travel time)
+```
+
+---
+
+## Track Speed Limits vs Train Speed
+
+```
+Two fixed limits on every Track — set by infrastructure, never change:
+
+  minSpeedLimit → slowest a train is allowed to move on this track
+                  enforced by operations (don't block the line)
+                  used by IntervalBuilder for worst-case occupancy:
+                    travelSeconds = Math.ceil(distance / minSpeedLimit)
+
+  maxSpeedLimit → fastest a train is allowed on this track
+                  enforced by physics (curve radius, track grade, quality)
+                  used by SignalController as a hard safety ceiling
+
+One dynamic value on every Train:
+
+  train.speed   → current speed, changes as train accelerates or brakes
+                  0 at station (waiting for signal)
+                  must reach minSpeedLimit after entering a block
+                  must never exceed maxSpeedLimit
+
+Valid operating range on any track = [minSpeedLimit, maxSpeedLimit]
+
+SignalController validates:
+  train.speed >= track.minSpeedLimit  → train is moving fast enough
+  train.speed <= track.maxSpeedLimit  → train is within safe limit
+  violation of maxSpeedLimit          → emergency, signal forced RED
+
+Why minSpeedLimit for intervals (not maxSpeedLimit):
+  Worst case occupancy = train moves at the slowest allowed speed.
+  Conservative overestimate → track held slightly longer than reality.
+  Safe: next train waits. Underestimate would risk collision model.
+
+Why Math.ceil:
+  distance / minSpeedLimit = 4.9 → ceil = 5, not 4.
+  Never release a track 0.1 seconds early in the model.
+```
+
+---
+
+## Arrival Time vs Actual Arrival
+
+```
+arrivalTime       → planned, set in constructor by station planner
+                    the promise made to passengers
+
+actualArrivalTime → calculated by IntervalBuilder from path + trackSpeedLimit
+                    what the system predicts will actually happen
+
+delayHours        → actualArrivalTime - arrivalTime
+                    0 if on time, positive if late
+                    logged automatically by IntervalBuilder
+```
+
+---
+
+## Bidirectional Graph — Direction Filter
+
+```
+Every track stored under BOTH nodes:
+  T1 (startNode=S1, endNode=S2):
+    adjacencyList["S1"] → [T1]
+    adjacencyList["S2"] → [T1]   ← same object, two references
+
+PathFinder filters at query time:
+
+  RIGHT train at S2:
+    T1.startNode == S2? NO  → SKIP  (prevents going back to S1)
+    T2.startNode == S2? YES → go to S3
+
+  LEFT train at S2:
+    T1.endNode == S2? YES → go to S1
+    T2.endNode == S2? NO  → SKIP  (prevents going forward to S3)
+
+Track has no direction. Direction belongs to the Train.
+```
+
+---
+
+## Meet and Pass — Opposite Direction Conflict
+
+```
+Single track shared by both directions:
+  Train A (RIGHT, EXPRESS): enters 08:10, exits 08:20
+  Train B (LEFT,  GOODS):   enters 08:12, exits 08:22
+
+Conflict window:
+  start = max(08:10, 08:12) = 08:12
+  end   = min(08:20, 08:22) = 08:20
+
+Resolution (pre-dispatch, before either train moves):
+  Train A = EXPRESS → no change
+  Train B = GOODS   → delayed by 8 minutes at source
+  SIG_B_OUT → RED until Train A clears the track
+```
+
+---
+
+## Blocking Precedence — Same Direction Conflict
+
+```
+Single track, same direction:
+  [T0: Train1 HIGH] -[T1]- [T2: Train2 LOW] -[T3]- ...
+
+  Train1 wants T1 → T2 → T3
+  Train2 physically sitting on T2 — in the way
+
+PriorityQueue says dispatch Train1 first.
+But Train2 must move before Train1 can enter T2.
+
+DependencyResolver:
+  Train1 depends on Train2
+
+Topological Sort result:
+  [Train2, Train1]  ← physical position overrides priority
 ```
 
 ---
 
 ## Algorithm Stack
 
-| Problem | Algorithm | Reference |
+| Problem | Algorithm | LC Reference |
 |---|---|---|
-| Train dispatch order | Priority Queue (time first, priority tiebreak) | LC #253 Meeting Rooms II |
-| Shortest path — EXPRESS / PASSENGER | Dijkstra (weight = distance / speed) | LC #743 Network Delay Time |
-| Shortest path — GOODS / LOCAL | Bellman-Ford (junction limit K) | LC #787 Cheapest Flights |
-| Pre-dispatch deadlock check | Cycle Detection (two HashSets) | LC #207 Course Schedule |
-| Safe train dispatch order | Topological Sort | LC #210 Course Schedule II |
-| Track reservation conflicts | Interval Overlap | LC #56 Merge Intervals |
-| Meet and Pass scheduling | DP + Intervals | LC #1235 Max Profit Job Scheduling |
-
----
-
-## Meet and Pass — Time Window Conflict
-
-```
-Scenario:
-  Single track T002 shared by both directions.
-  Train A (RIGHT): enters 08:10, exits 08:20
-  Train B (LEFT):  enters 08:12, exits 08:22
-
-Conflict window:
-  start = max(08:10, 08:12) = 08:12
-  end   = min(08:20, 08:22) = 08:20
-  Train B must be delayed until 08:20.
-
-Resolution:
-  Train A = EXPRESS  → proceeds
-  Train B = GOODS    → delayed 8 minutes at source
-  SIG_B_OUT          → RED until 08:20
-  After 08:20        → SIG_B_OUT → GREEN, Train B departs
-
-This runs at scheduling time — before either train departs.
-Not reactive. Predictive.
-```
-
----
-
-## Track Model
-
-```java
-Track {
-    inUse  : false    // no train on this track
-    usedBy : []       // empty list
-
-    // When Train A enters:
-    inUse  : true
-    usedBy : ["TRAIN_A"]
-
-    // When Train B also enters (conflict zone):
-    usedBy : ["TRAIN_A", "TRAIN_B"]  ← triggers ConflictDetector
-
-    // When Train A exits:
-    usedBy : ["TRAIN_B"]
-    inUse  : true
-
-    // When Train B exits:
-    inUse  : false
-    usedBy : []
-}
-```
+| Train dispatch order | PriorityQueue (time → priority → type → id) | #253 Meeting Rooms II |
+| Shortest path — EXPRESS / PASSENGER_EXP | Dijkstra (weight = distance / minSpeedLimit) | #743 Network Delay Time |
+| Shortest path — GOODS / LOCAL | Bellman-Ford (K junction limit, temp snapshot, weight = distance / minSpeedLimit) | #787 Cheapest Flights |
+| Pre-dispatch deadlock check | Cycle Detection (two HashSets) | #207 Course Schedule |
+| Safe dispatch order with blocking | Topological Sort | #210 Course Schedule II |
+| Track reservation conflicts | Interval Overlap | #56 Merge Intervals |
+| Meet and Pass scheduling | DP + Intervals | #1235 Max Profit Job Scheduling |
 
 ---
 
@@ -299,56 +417,79 @@ Track {
 
 ```
 interlocking/
+│
 ├── src/
+│   │
 │   ├── model/
-│   │   ├── Node.java                   ← abstract base: id, name
-│   │   ├── SignalNode.java             ← extends Node: state, facing
-│   │   ├── JunctionNode.java           ← extends Node: state, direction, primaryNode, secondaryNode
-│   │   ├── StationNode.java            ← extends Node: stationCode, platformCount
-│   │   ├── Track.java                  ← id, name, startNode, endNode, distance, inUse, usedBy, occupiedDirection
-│   │   ├── Train.java                  ← id, name, type, direction, startNode, endNode, speed, priority, departureTime
-│   │   └── TrackInterval.java          ← trainId, trackId, enterTime, exitTime, direction
+│   │   ├── Node.java               ✓  abstract: id, name
+│   │   ├── SignalNode.java         ✓  state, facing
+│   │   ├── JunctionNode.java       ✓  state, direction, primaryNode, secondaryNode
+│   │   ├── StationNode.java        ✓  stationCode, platformCount
+│   │   ├── OriginNode.java         ✓  virtual spawn node
+│   │   ├── Track.java              ✓  id, name, startNode, endNode, distance,
+│   │   │                               minSpeedLimit, maxSpeedLimit,
+│   │   │                               inUse, usedBy, occupiedDirection,
+│   │   │                               reserve(), release()
+│   │   ├── Train.java              ✓  id, name, type, priority, direction,
+│   │   │                               startNode, endNode, speed, trackOnUse,
+│   │   │                               departureTime, arrivalTime,
+│   │   │                               actualArrivalTime, delayHours
+│   │   └── TrackInterval.java      ✓  trainId, trackId, enterTime, exitTime,
+│   │                                   direction, conflictsWith(), delay(Duration),
+│   │                                   getConflictWindow(), getOccupancyDuration()
 │   │
 │   ├── enums/
-│   │   ├── SignalState.java            ← RED, YELLOW, DOUBLE_YELLOW, GREEN
-│   │   ├── SignalFacing.java           ← RIGHT, LEFT
-│   │   ├── Direction.java              ← RIGHT, LEFT
-│   │   ├── JunctionState.java          ← PRIMARY (false), SECONDARY (true)
-│   │   ├── TrainType.java              ← EMU, ENGINE, GOODS, PASSENGER
-│   │   └── Priority.java              ← EXPRESS, PASSENGER_EXP, GOODS, LOCAL
+│   │   ├── SignalState.java        ✓  RED, YELLOW, DOUBLE_YELLOW, GREEN
+│   │   ├── Facing.java             ✓  RIGHT, LEFT
+│   │   ├── Direction.java          ✓  RIGHT, LEFT
+│   │   ├── JunctionState.java      ✓  PRIMARY, SECONDARY
+│   │   ├── TrainType.java          ✓  EMU, ENGINE, GOODS, PASSENGER
+│   │   └── TrainPriority.java      ✓  EXPRESS, PASSENGER_EXP, GOODS, LOCAL
 │   │
 │   ├── core/
-│   │   ├── GraphBuilder.java           ← HashMap<String, List<Track>> adjacency list
-│   │   ├── PathFinder.java             ← Dijkstra (EXPRESS/PASSENGER_EXP) + Bellman-Ford (GOODS/LOCAL)
-│   │   ├── Dispatcher.java             ← PriorityQueue: sort by departureTime, priority as tiebreaker
-│   │   ├── ConflictDetector.java       ← orchestrates all conflict detection
-│   │   │
-│   │   └── conflict/
-│   │       ├── TimeWindowConflict.java ← hasTimeConflict(), getConflictWindow()
-│   │       ├── HeadOnConflict.java     ← opposite direction on same track
-│   │       ├── FollowingConflict.java  ← same direction, one train behind another
-│   │       └── DeadlockDetector.java   ← cycle detection (currentPath + visited HashSets)
+│   │   ├── GraphBuilder.java       ✓  HashMap<String, List<Track>>
+│   │   │                               addTrack() — registers both nodes
+│   │   │                               getTracksFrom(nodeId)
+│   │   │                               getAdjacencyList()
+│   │   ├── PathFinder.java         ✓  dijkstra() — EXPRESS / PASSENGER_EXP
+│   │   │                               bellmanFord() — GOODS / LOCAL
+│   │   │                               getNeighbor() — direction filter
+│   │   │                               reconstructPath() — end to start, reversed
+│   │   ├── Dispatcher.java         ✓  PriorityQueue<Train>
+│   │   │                               sort: time → priority → type → id
+│   │   │                               addTrain() — replaces past departure time
+│   │   └── ConflictDetector.java   ⬜  orchestrates all conflict checks
+│   │
+│   ├── conflict/
+│   │   ├── TimeWindowConflict.java ⬜  opposite direction time overlap
+│   │   ├── HeadOnConflict.java     ⬜  opposite direction, same track, runtime
+│   │   ├── FollowingConflict.java  ⬜  same direction, one behind another
+│   │   └── DeadlockDetector.java   ⬜  cycle detection — currentPath + visited
 │   │
 │   ├── signal/
-│   │   ├── SignalController.java       ← sets RED/YELLOW/DOUBLE_YELLOW/GREEN
-│   │   └── SignalRule.java             ← fail-safe rules: default RED, GREEN conditions
+│   │   ├── SignalController.java   ⬜  sets RED/YELLOW/DOUBLE_YELLOW/GREEN
+│   │   └── SignalRule.java         ⬜  fail-safe rules, 4 GREEN conditions
 │   │
 │   ├── scheduler/
-│   │   ├── TrainScheduler.java         ← scheduleAndResolve(): runs before any train departs
-│   │   ├── IntervalBuilder.java        ← computeIntervals(): builds TrackInterval list per train
-│   │   └── MeetAndPassResolver.java    ← delays lower priority train, resolves time window conflicts
+│   │   ├── TrainScheduler.java     ⬜  orchestrates all pre-dispatch steps
+│   │   ├── IntervalBuilder.java    ✓  buildPaths() — PathFinder for all trains
+│   │   │                               buildIntervals() — TrackInterval per track
+│   │   │                               computeIntervals() — LocalDateTime based
+│   │   │                               sets actualArrivalTime + delayHours
+│   │   ├── DependencyResolver.java ⬜  same direction blocking → topo sort
+│   │   └── MeetAndPassResolver.java⬜  opposite direction → delay lower priority
 │   │
 │   ├── db/
-│   │   ├── DatabaseLayer.java          ← PostgreSQL CRUD
-│   │   └── schema.sql                  ← 3NF schema
+│   │   ├── DatabaseLayer.java      ⬜  PostgreSQL CRUD (V2)
+│   │   └── schema.sql              ✓  3NF schema
 │   │
-│   └── Main.java
+│   └── Main.java                   ~  bootstrap and test data
 │
 ├── test/
-│   ├── GraphBuilderTest.java
-│   ├── PathFinderTest.java
-│   ├── ConflictDetectorTest.java
-│   └── SchedulerTest.java
+│   ├── GraphBuilderTest.java       ⬜
+│   ├── PathFinderTest.java         ⬜
+│   ├── ConflictDetectorTest.java   ⬜
+│   └── SchedulerTest.java          ⬜
 │
 ├── README.md
 └── LICENSE
@@ -356,44 +497,68 @@ interlocking/
 
 ---
 
+## Execution Order
+
+```
+1. GraphBuilder         nodes and tracks registered
+
+2. IntervalBuilder      PathFinder runs for every train upfront
+                        TrackIntervals built using LocalDateTime
+                        actualArrivalTime and delayHours set per Train
+
+3. DependencyResolver   same direction blocking detected
+                        Topological Sort rewrites dispatch order
+
+4. MeetAndPassResolver  opposite direction time window conflicts
+                        lower priority train departure delayed at source
+
+5. Dispatcher           trains popped — time first, priority tiebreak
+
+6. ConflictDetector     real-time check before each track entry
+                        last line of defence
+
+7. SignalController     RED/GREEN set per ConflictDetector result
+
+8. Train moves          block by block
+                        track.reserve() on entry
+                        track.release() on exit
+
+Repeat 6,7,8 per track.
+Repeat 5,6,7,8 per train.
+```
+
+---
+
 ## How It Works
 
 ```
-1. Trains loaded into PriorityQueue
-      sorted by: departureTime first, priority second (tiebreaker only)
+1. Trains added with departureTime and planned arrivalTime
 
-2. Scheduler runs BEFORE dispatch
-      builds TrackIntervals for every train using PathFinder
-      detects Meet-and-Pass conflicts using time window overlap
-      delays lower priority train at source until conflict clears
+2. Scheduler runs pre-dispatch (steps 2-4)
+     all paths computed upfront — no surprises mid-dispatch
 
-3. Dispatcher pops next train (earliest departure time)
+3. Dispatcher pops next train
 
-4. PathFinder finds route
-      EXPRESS / PASSENGER_EXP → Dijkstra (weight = distance / speed)
-      GOODS / LOCAL           → Bellman-Ford (junction limit applied)
+4. ConflictDetector checks each track in path:
+     a. track.inUse == false?
+     b. track.usedBy is empty?
+     c. Opposite direction train on this track?
+     d. Adding this train creates a cycle?
 
-5. ConflictDetector checks each track in path:
-      a. track.inUse == false?
-      b. track.usedBy list is empty?
-      c. Opposite direction train on this track?
-      d. Does adding this train create a cycle? (DFS)
+5. If clear:
+     track.reserve(trainId, direction)
+     train.setTrackOnUse(trackId)
+     signalController → GREEN
 
-6. If clear:
-      track.inUse = true
-      track.usedBy.add(train.id)
-      signalController.advance(signal) → GREEN
+6. If conflict (edge case scheduler missed):
+     signalController → RED
+     dispatcher.requeue(train)
 
-7. If conflict:
-      signalController.setRed(signal)
-      dispatcher.requeue(train)
+7. Train moves block by block:
+     track.release() on previous block
+     signal behind → RED, signal ahead → checked fresh
 
-8. As train moves block by block:
-      previous track: usedBy.remove(train.id)
-      if usedBy.isEmpty() → inUse = false
-      signal behind train → RED
-
-9. Database updated at every state change
+8. Database updated at every state change (V2)
 ```
 
 ---
@@ -409,7 +574,7 @@ CREATE TABLE stations (
 );
 
 CREATE TABLE nodes (
-    node_id    VARCHAR(20)  PRIMARY KEY,
+    node_id    VARCHAR(20) PRIMARY KEY,
     node_name  VARCHAR(100),
     node_type  VARCHAR(10),
     station_id VARCHAR(10),
@@ -420,25 +585,27 @@ CREATE TABLE signals (
     node_id      VARCHAR(20) PRIMARY KEY,
     signal_state VARCHAR(20) DEFAULT 'RED',
     facing       VARCHAR(10),
-    FOREIGN KEY  (node_id) REFERENCES nodes(node_id)
+    FOREIGN KEY (node_id) REFERENCES nodes(node_id)
 );
 
 CREATE TABLE junctions (
     node_id        VARCHAR(20) PRIMARY KEY,
     primary_node   VARCHAR(20),
     secondary_node VARCHAR(20),
-    state          BOOLEAN     DEFAULT FALSE,
+    state          BOOLEAN DEFAULT FALSE,
     direction      VARCHAR(10),
     FOREIGN KEY (node_id) REFERENCES nodes(node_id)
 );
 
 CREATE TABLE tracks (
-    track_id    VARCHAR(20)  PRIMARY KEY,
-    track_name  VARCHAR(100),
-    start_node  VARCHAR(20),
-    end_node    VARCHAR(20),
-    distance    INT,
-    in_use      BOOLEAN      DEFAULT FALSE,
+    track_id          VARCHAR(20) PRIMARY KEY,
+    track_name        VARCHAR(100),
+    start_node        VARCHAR(20),
+    end_node          VARCHAR(20),
+    distance          INT,
+    min_speed_limit   DECIMAL(6,2),
+    max_speed_limit   DECIMAL(6,2),
+    in_use            BOOLEAN DEFAULT FALSE,
     FOREIGN KEY (start_node) REFERENCES nodes(node_id),
     FOREIGN KEY (end_node)   REFERENCES nodes(node_id)
 );
@@ -453,16 +620,17 @@ CREATE TABLE track_usage (
 );
 
 CREATE TABLE trains (
-    train_id        VARCHAR(20)  PRIMARY KEY,
-    train_name      VARCHAR(100),
-    train_type      VARCHAR(20),
-    priority        VARCHAR(20),
-    direction       VARCHAR(10),
-    start_node      VARCHAR(20),
-    end_node        VARCHAR(20),
-    speed           DECIMAL(6,2),
-    departure_time  INT,
-    track_on_use    VARCHAR(20),
+    train_id          VARCHAR(20) PRIMARY KEY,
+    train_name        VARCHAR(100),
+    train_type        VARCHAR(20),
+    priority          VARCHAR(20),
+    direction         VARCHAR(10),
+    start_node        VARCHAR(20),
+    end_node          VARCHAR(20),
+    speed             DECIMAL(6,2),
+    departure_time    TIMESTAMP,
+    arrival_time      TIMESTAMP,
+    track_on_use      VARCHAR(20),
     FOREIGN KEY (start_node)   REFERENCES nodes(node_id),
     FOREIGN KEY (end_node)     REFERENCES nodes(node_id),
     FOREIGN KEY (track_on_use) REFERENCES tracks(track_id)
@@ -480,8 +648,30 @@ CREATE TABLE trains (
 | Junction Signal | Before every track switch | RED |
 | Block Signal | Between stations on single track | RED |
 
-> Fail-safe rule: All signals default to RED. GREEN is only set when
-> all conditions are verified safe by ConflictDetector.
+> Fail-safe: All signals default RED. GREEN set only when all four
+> conditions verified safe by ConflictDetector.
+
+---
+
+## Build Order
+
+```
+Done  ✓   Node, SignalNode, JunctionNode, StationNode, OriginNode
+Done  ✓   Track, Train, TrackInterval
+Done  ✓   All enums
+Done  ✓   GraphBuilder
+Done  ✓   PathFinder  (Dijkstra + Bellman-Ford)
+Done  ✓   Dispatcher
+Done  ✓   IntervalBuilder
+
+Next  →   DependencyResolver
+Then  →   MeetAndPassResolver
+Then  →   TrainScheduler
+Then  →   ConflictDetector
+Then  →   SignalController + SignalRule
+Then  →   Wire everything in Main
+Last  →   Tests, then DB layer (V2)
+```
 
 ---
 
@@ -489,7 +679,7 @@ CREATE TABLE trains (
 
 - **Language:** Java
 - **Algorithms:** Dijkstra, Bellman-Ford, Topological Sort, Cycle Detection, Priority Queue
-- **Database:** PostgreSQL
+- **Database:** PostgreSQL (V2)
 - **Visualization:** GraphStream (core), React + WebSocket (V3)
 - **API:** Spring Boot (V2)
 
@@ -502,8 +692,6 @@ MIT License — see [LICENSE](LICENSE) for details.
 ---
 
 ## Author
+
 **Abishek Ganesh B S**
-[GitHub](https://github.com/notAbishek)
-
-
-
+[GitHub](https://github.com/notAbishek) · Chennai, Tamil Nadu

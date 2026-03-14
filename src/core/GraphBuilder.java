@@ -7,8 +7,7 @@ public class GraphBuilder {
 
     private final HashMap<String, List<Track>> adjacencyList = new HashMap<>();
 
-    public GraphBuilder() {
-    }
+    public GraphBuilder() {}
 
     public void addTrack(Track track) {
         String fromId = track.getStartNode().getId();
@@ -18,29 +17,11 @@ public class GraphBuilder {
         adjacencyList.computeIfAbsent(toId,   k -> new ArrayList<>()).add(track);
     }
 
+    public List<Track> getTracksFrom(String nodeId) {
+        return adjacencyList.getOrDefault(nodeId, new ArrayList<>());
+    }
 
     public HashMap<String, List<Track>> getAdjacencyList() {
         return adjacencyList;
     }
-
-
-
-    // public void printGraph() {
-    //     System.out.println("=== GRAPH ===");
-    //     for (Map.Entry<String, List<Track>> entry : adjacencyList.entrySet()) {
-    //         String nodeId = entry.getKey();
-    //         List<Track> outgoing = entry.getValue();
-    //         if (outgoing.isEmpty()) {
-    //             System.out.println(nodeId + " → (no outgoing tracks)");
-    //         } else {
-    //             for (Track t : outgoing) {
-    //                 System.out.println(nodeId
-    //                     + " →[" + t.getId()
-    //                     + " | " + t.getDistance() + "m]→ "
-    //                     + t.getEndNode().getId());
-    //             }
-    //         }
-    //     }
-    //     System.out.println("=============");
-    // }
 }
