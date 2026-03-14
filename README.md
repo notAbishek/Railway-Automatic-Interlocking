@@ -1,4 +1,4 @@
-# Railway Automatic Interlocking (Under Devlopement)
+# Railway Automatic Interlocking
 > An algorithm-driven railway traffic management system that automatically dispatches trains,
 > detects conflicts, prevents deadlocks, and controls signals — without human intervention.
 
@@ -15,80 +15,7 @@ java -cp out Main
 
 ## Architecture
 
-```
-  ┌──────────────────────────────────────────────────────────────┐
-  │                        INPUT LAYER                            │
-  │                                                               │
-  │   Train(id, name, type, priority, trackOnUse, direction,      │
-  │         startNode, endNode, speed, departureTime,             │
-  │         arrivalTime)                                          │
-  │   Track(id, name, startNode, endNode, distance,               │
-  │         minSpeedLimit, maxSpeedLimit)                         │
-  └──────────────────┬────────────────────────────────────────────┘
-                     │
-                     ▼
-  ┌──────────────────────────────────────────────────────────────┐
-  │                  SCHEDULER (Pre-Dispatch)                     │
-  │                                                               │
-  │   IntervalBuilder   → PathFinder for every train upfront      │
-  │                        builds TrackInterval per track         │
-  │                        sets actualArrivalTime + delayHours    │
-  │                                                               │
-  │   DependencyResolver → same direction blocking detection      │
-  │                         Topological Sort → correct order      │
-  │                                                               │
-  │   MeetAndPassResolver → opposite direction time window        │
-  │                          delays lower priority at source      │
-  └──────────────────┬────────────────────────────────────────────┘
-                     │
-                     ▼
-  ┌──────────────────────────────────────────────────────────────┐
-  │                      CORE ENGINE                              │
-  │                                                               │
-  │   ┌──────────────────┐    ┌──────────────────────┐           │
-  │   │    Dispatcher    │    │      PathFinder       │           │
-  │   │                  │───▶│                       │           │
-  │   │  PriorityQueue   │    │  Dijkstra             │           │
-  │   │                  │    │  (EXPRESS /           │           │
-  │   │  Sort:           │    │   PASSENGER_EXP)      │           │
-  │   │  1. departureTime│    │                       │           │
-  │   │  2. priority     │    │  Bellman-Ford         │           │
-  │   │  3. trainType    │    │  (GOODS / LOCAL)      │           │
-  │   │  4. id           │    │  K = junction limit   │           │
-  │   └──────────────────┘    └──────────┬────────────┘           │
-  │                                      ▼                        │
-  │                        ┌─────────────────────┐               │
-  │                        │   ConflictDetector  │               │
-  │                        │                     │               │
-  │                        │  Track.usedBy list  │               │
-  │                        │  Direction check    │               │
-  │                        │  Cycle detection    │               │
-  │                        │  Time window check  │               │
-  │                        └──────────┬──────────┘               │
-  └───────────────────────────────────┼────────────────────────── ┘
-                                      │
-                                      ▼
-  ┌──────────────────────────────────────────────────────────────┐
-  │                    SIGNAL CONTROLLER                          │
-  │                                                               │
-  │   Default state = RED (fail-safe, always)                     │
-  │   States: RED → YELLOW → DOUBLE_YELLOW → GREEN               │
-  │                                                               │
-  │   Set GREEN only when:                                        │
-  │     1. track.inUse == false                                   │
-  │     2. track.usedBy list is empty                             │
-  │     3. No cycle in reservation graph                          │
-  │     4. Opposite direction track is clear                      │
-  └──────────────────┬────────────────────────────────────────────┘
-                     │
-                     ▼
-  ┌──────────────────────────────────────────────────────────────┐
-  │                    DATABASE LAYER                             │
-  │                    (PostgreSQL — 3NF)                         │
-  │                                                               │
-  │   trains | tracks | nodes | reservations | signals            │
-  └──────────────────────────────────────────────────────────────┘
-```
+![Architecture](assets/architecture.svg)
 
 ---
 
@@ -219,28 +146,12 @@ A signal only applies to a train whose direction matches its facing.
 
 ## Junction Explained
 
+![Junction Diagram](assets/junction.svg)
+
 ```
-Direction RIGHT — two tracks merge into one:
-
-    Track A ──→ ╮
-                 JCT ──→ continues
-    Track B ──→ ╯
-
-    state = false → routes via primaryNode (Track A)
-    state = true  → routes via secondaryNode (Track B)
-
-
-Direction LEFT — one track splits into two:
-
-                 ╭──→ Track A
-    continues ──→ JCT
-                 ╰──→ Track B
-
-    state = false → exits via primaryNode (Track A)
-    state = true  → exits via secondaryNode (Track B)
-
-No tertiary node needed — outgoing connection is a Track
-in the adjacency list, not stored on the Junction.
+state = false → routes via primaryNode
+state = true  → routes via secondaryNode
+No tertiary node needed — outgoing connection is a Track in the adjacency list.
 ```
 
 ---
@@ -395,20 +306,11 @@ Topological Sort result:
 
 ## Track Layout — 3 Stations
 
-```
-  STATION A             JCT W        JCT E          STATION B
-     │                   │              │                │
-  [SIG_A1]──[T001]──[SIG_JL]──[T003]──[SIG_JR]──[T004]──[SIG_B1]   → RIGHT
-  [SIG_A2]──────────[SIG_JL2]─[T003]──[SIG_JR2]─[T004]──[SIG_B2]   ← LEFT
-                         │
-                      [T002]
-                         │
-                      [SIG_C1]
-                         │
-                    STATION C
+![Track Layout](assets/track-layout.svg)
 
-  Nodes  : SignalNode x8, JunctionNode x2, StationNode x3
-  Tracks : T001, T002, T003, T004 (bidirectional — direction from Train)
+```
+Nodes  : SignalNode x8, JunctionNode x2, StationNode x3
+Tracks : T001, T002, T003, T004 (bidirectional — direction from Train)
 ```
 
 ---
