@@ -1,7 +1,8 @@
+// Train.java — add speed, departureTime, arrivalTime only
 package model;
 
-import enums.Direction;
-import enums.TrainType;
+import enums.*;
+import java.time.LocalDateTime;
 
 public class Train {
     final private String id;
@@ -12,62 +13,49 @@ public class Train {
     private Direction direction;
     private String startNode;
     private String endNode;
-    private double speed = 0;
+    private double speed;
+    private LocalDateTime departureTime;
+    private LocalDateTime arrivalTime;
 
     public Train(
         String id,
         String name,
         TrainType type,
         TrainPriority priority,
+        String trackOnUse,
         Direction direction,
         String startNode,
-        String endNode
+        String endNode,
+        double speed,
+        LocalDateTime departureTime,
+        LocalDateTime arrivalTime
     ) {
-        this.id = id;
-        this.name = name;
-        this.type = type;
-        this.priority = priority;
-        this.direction = direction;
-        this.startNode = startNode;
-        this.endNode = endNode;
+        this.id            = id;
+        this.name          = name;
+        this.type          = type;
+        this.priority      = priority;
+        this.trackOnUse    = trackOnUse;
+        this.direction     = direction;
+        this.startNode     = startNode;
+        this.endNode       = endNode;
+        this.speed         = speed;
+        this.departureTime = departureTime;
+        this.arrivalTime   = arrivalTime;
     }
 
-    public String getId() {
-        return this.id;
+    public String        getId()            { return this.id; }
+    public String        getName()          { return this.name; }
+    public TrainType     getType()          { return this.type; }
+    public TrainPriority getPriority()      { return this.priority; }
+    public String        getTrackOnUse()    { return this.trackOnUse; }
+    public Direction     getDirection()     { return this.direction; }
+    public String        getStartNode()     { return this.startNode; }
+    public String        getEndNode()       { return this.endNode; }
+    public double        getSpeed()         { return this.speed; }
+    public LocalDateTime getDepartureTime() { return this.departureTime; }
+    public LocalDateTime getArrivalTime()   { return this.arrivalTime; }
+
+    public void setDepartureTime(LocalDateTime departureTime) {
+        this.departureTime = departureTime;
     }
-
-    public String getName() {
-        return this.name;
-    }
-
-    public TrainType getType() {
-        return this.type;
-    }
-
-    public TrainPriority getPriority() {
-        return this.priority;
-    }
-
-    public String getTrackOnUse() {
-        return this.trackOnUse;
-    }
-    public Direction getDirection() {
-        return this.direction;
-    }
-
-    public String getStartNode() {
-        return this.startNode;
-    }
-
-    public String getEndNode() {
-        return this.endNode;
-    }
-
-    public double getSpeed() {
-        return this.speed;
-    }
-
-
-
-
 }

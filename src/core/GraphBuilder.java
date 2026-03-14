@@ -7,7 +7,8 @@ public class GraphBuilder {
 
     private final HashMap<String, List<Track>> adjacencyList = new HashMap<>();
 
-    public GraphBuilder() {}
+    public GraphBuilder() {
+    }
 
     public void addTrack(Track track) {
         String fromId = track.getStartNode().getId();

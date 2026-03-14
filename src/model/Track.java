@@ -13,20 +13,24 @@ public class Track {
     private boolean inUse;
     private List<String> usedBy;
     private Direction occupiedDirection;
+    private double trackSpeedLimit;
 
     public Track() {
         this.inUse = false;
         this.usedBy = new ArrayList<>();
+        this.trackSpeedLimit = 5.0;
     }
 
-    public Track(String id, String name, Node startNode, Node endNode, int distance) {
+    public Track(String id, String name, Node startNode, Node endNode, int distance, double trackSpeedLimit) {
         this.id = id;
         this.name = name;
         this.startNode = startNode;
         this.endNode = endNode;
         this.distance = distance;
-        this.occupiedDirection = null; 
+        this.trackSpeedLimit = trackSpeedLimit;
+        this.occupiedDirection = null;
         this.inUse = false;
+        this.trackSpeedLimit = trackSpeedLimit;
         this.usedBy = new ArrayList<>();
     }
     public String getId() {
