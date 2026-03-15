@@ -162,18 +162,63 @@ public class PathFinder {
     // Returns the neighbor node ID based on topology (bidirectional)
     // Returns null if this track is not connected to currentNodeId
     private String getNeighbor(Track track, String currentNodeId) {
-        // Try FORWARD direction (startNode → endNode)
         if (track.getStartNode().getId().equals(currentNodeId)) {
-            // Track type restriction — null allowedTypes means all trains allowed
+            // If the current node is a SPLIT junction (LEFT direction),
+            // check if this outgoing track is the one that is set
+            if (track.getStartNode() instanceof model.JunctionNode) {
+                model.JunctionNode jct =
+                    (model.JunctionNode) track.getStartNode();
+                if (jct.getDirection() ==
+                        enums.JunctionDirection.LEFT) {
+                    if (!isJunctionRouteAllowed(jct, track)) return null;
+                }
+                // RIGHT junction: only one outgoing track exists,
+                // always allowed — no check needed
+            }
+
+            // allowedTypes check (already exists — keep it)
             if (!track.isAllowedFor(train.getType())) return null;
+
             return track.getEndNode().getId();
         }
-        // Try REVERSE direction (endNode → startNode)
+
+        // REVERSE direction
         if (track.getEndNode().getId().equals(currentNodeId)) {
+            // If the current node is a MERGE junction (RIGHT direction),
+            // check if this incoming track is the one that is set
+            if (track.getEndNode() instanceof model.JunctionNode) {
+                model.JunctionNode jct =
+                    (model.JunctionNode) track.getEndNode();
+                if (jct.getDirection() ==
+                        enums.JunctionDirection.RIGHT) {
+                    if (!isJunctionRouteAllowed(jct, track)) return null;
+                }
+                // LEFT junction REVERSE: only one incoming track exists
+            }
+
             if (!track.isAllowedFor(train.getType())) return null;
+
             return track.getStartNode().getId();
         }
+
         return null;
+    }
+
+    // Returns true if this track is the allowed route through
+    // the junction based on junction.state
+    private boolean isJunctionRouteAllowed(model.JunctionNode jct,
+                                            model.Track track) {
+        // state false = primary route, state true = secondary route
+        String allowedNodeId = jct.getState()
+            ? jct.getSecondaryNodeId()
+            : jct.getPrimaryNodeId();
+
+        if (allowedNodeId == null) return true;
+        // null means junction has no restriction set yet — allow all
+
+        // Check if this track connects to the allowed node
+        return track.getStartNode().getId().equals(allowedNodeId)
+            || track.getEndNode().getId().equals(allowedNodeId);
     }
 
     // Travel time in seconds = distance / minSpeedLimit

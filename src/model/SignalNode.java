@@ -3,6 +3,7 @@ package model;
 import enums.SignalType;
 
 public class SignalNode extends Node {
+    // IR G&SR principle: fixed signal defaults to ON (danger/RED).
     private SignalState state = SignalState.RED;
     private final SignalType signalType;
     private String protectsTrackId;   // set by GraphBuilder, never by user

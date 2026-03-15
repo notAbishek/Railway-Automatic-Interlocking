@@ -82,27 +82,57 @@ public class ConflictDetector {
     // Called when a train exits a track — release junction isolation
     public void onTrackExit(Train train, Track track,
                              JunctionNode junction) {
+        if (!train.isLastVehicleConfirmed()) {
+            log("WARNING: last vehicle not confirmed for "
+                + train.getId(), train.getId(), track.getId());
+        }
         if (junction != null) {
             junction.release(train.getId());
         }
         track.release(train.getId());
         train.clearTrackOnUse();
-        // Check last vehicle confirmation
-        if (!train.isLastVehicleConfirmed() && !track.getUsedBy().isEmpty()) {
-            log("WARNING: last vehicle not confirmed for "
-                + train.getId(), train.getId(), track.getId());
-        }
     }
 
     // Called when a train enters a track — lock junction
     public void onTrackEntry(Train train, Track track,
                               TrackTraversal traversal,
                               JunctionNode junction) {
-        track.reserve(train.getId(), traversal.getDirection());
-        train.setTrackOnUse(track.getId());
+        // Set junction state based on which route this train is taking
+        if (junction != null && junction.getDirection()
+                == enums.JunctionDirection.LEFT) {
+            // This is a SPLIT junction — determine which exit this train uses
+            // We need to know the next track's node to decide primary vs secondary
+            // For V1: derive from the track being entered after this junction
+            // The track being reserved IS the outgoing track from the junction
+            // Check if this track leads to the primary or secondary node
+
+            String trackEndId = track.getEndNode().getId();
+            if (trackEndId.equals(junction.getSecondaryNodeId())) {
+                junction.setState(true);   // secondary route
+            } else {
+                junction.setState(false);  // primary route (default)
+            }
+        }
+
+        if (junction != null && junction.getDirection()
+                == enums.JunctionDirection.RIGHT) {
+            // This is a MERGE junction — record which incoming side
+            String trackStartId = track.getStartNode().getId();
+            if (trackStartId.equals(junction.getSecondaryNodeId())) {
+                junction.setState(true);
+            } else {
+                junction.setState(false);
+            }
+        }
+
+        // Lock the junction AFTER state is set
         if (junction != null) {
             junction.isolate(train.getId());
         }
+
+        // Reserve the track (already exists — keep it)
+        track.reserve(train.getId(), traversal.getDirection());
+        train.setTrackOnUse(track.getId());
         train.resetLastVehicle();
     }
 

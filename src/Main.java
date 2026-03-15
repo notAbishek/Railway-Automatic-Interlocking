@@ -134,19 +134,37 @@ public class Main {
                     track, nextTrack, traversal, junction, train);
 
                 if (safe) {
-                    conflictDetector.onTrackEntry(
-                        train, track, traversal, junction);
+                    boolean cleared = true;
                     if (signal != null) {
-                        signalController.requestGreen(
+                        cleared = signalController.requestGreen(
                             signal, track, nextTrack, traversal,
                             junction, train.getId(),
                             new HashMap<>(), graph);
+                    }
+
+                    if (!cleared) {
+                        if (signal != null) {
+                            signalController.setRed(signal);
+                        }
+                        System.out.println("  HELD at " + track.getId()
+                            + " — signal did not clear");
+                        dispatcher.addTrain(train);
+                        break;
+                    }
+
+                    conflictDetector.onTrackEntry(
+                        train, track, traversal, junction);
+                    if (signal != null) {
+                        signalController.validateSpeed(train, track, signal);
                     }
                     System.out.println("  ENTER: " + track.getId()
                         + " [" + traversal.getDirection() + "]");
                     conflictDetector.onTrackExit(train, track, junction);
                     System.out.println("  EXIT:  " + track.getId());
                 } else {
+                    if (signal != null) {
+                        signalController.setRed(signal);
+                    }
                     System.out.println("  HELD at " + track.getId()
                         + " — conflict detected");
                     // Requeue train for retry

@@ -46,12 +46,24 @@ public class JunctionNode extends Node {
         return primaryNode;
     }
 
+    public String getPrimaryNodeId() {
+        return primaryNode;
+    }
+
     public String getSecondaryNode() {
+        return secondaryNode;
+    }
+
+    public String getSecondaryNodeId() {
         return secondaryNode;
     }
 
     public boolean getState() {
         return state;
+    }
+
+    public void setState(boolean state) {
+        this.state = state;
     }
 
     public JunctionDirection getDirection() {

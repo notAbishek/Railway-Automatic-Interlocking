@@ -45,6 +45,7 @@ public final class SignalRule {
                                 JunctionNode junction,
                                 String trainId,
                                 Map<String, String> blockedBy) {
+        // IR interlocking principle: do not clear signal unless route checks pass.
         return isTrackFree(track)
             && isDirectionClear(track, traversal)
             && isOverlapClear(track, nextTrack)
