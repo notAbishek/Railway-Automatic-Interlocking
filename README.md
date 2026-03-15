@@ -595,5 +595,4 @@ MIT License — see [LICENSE](LICENSE) for details.
 
 ## Author
 
-**Abishek Ganesh B S**
-[GitHub](https://github.com/notAbishek) · Chennai, Tamil Nadu
+[**Abishek Ganesh B S**](https://github.com/notAbishek)
