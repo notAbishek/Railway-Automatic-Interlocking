@@ -2,6 +2,7 @@ package scheduler;
 
 import core.GraphBuilder;
 import core.PathFinder;
+import enums.Direction;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -10,6 +11,7 @@ import java.util.List;
 import java.util.Map;
 import model.Track;
 import model.TrackInterval;
+import model.TrackTraversal;
 import model.Train;
 
 public class IntervalBuilder {
@@ -22,21 +24,20 @@ public class IntervalBuilder {
 
     // ─────────────────────────────────────────────
     // STEP 1 — Run PathFinder for every train upfront
-    // Returns map of trainId → ordered List<Track>
+    // Returns map of trainId → ordered List<TrackTraversal>
     // ─────────────────────────────────────────────
-    public Map<String, List<Track>> buildPaths(List<Train> trains) {
-        Map<String, List<Track>> paths = new HashMap<>();
+    public Map<String, List<TrackTraversal>> buildPaths(List<Train> trains) {
+        Map<String, List<TrackTraversal>> paths = new HashMap<>();
 
         for (Train train : trains) {
-            PathFinder  pathFinder = new PathFinder(train, graph);
-            List<Track> path       = pathFinder.findPath();
+            PathFinder           pathFinder = new PathFinder(train, graph);
+            List<TrackTraversal> path       = pathFinder.findPath();
 
             if (path.isEmpty()) {
                 throw new IllegalStateException(
                     "No path found for train " + train.getId()
                     + " | from: " + train.getStartNode()
                     + " | to: "   + train.getEndNode()
-                    + " | direction: " + train.getDirection()
                 );
             }
 
@@ -56,13 +57,13 @@ public class IntervalBuilder {
     // ─────────────────────────────────────────────
     public Map<String, List<TrackInterval>> buildIntervals(
             List<Train> trains,
-            Map<String, List<Track>> paths) {
+            Map<String, List<TrackTraversal>> paths) {
 
         Map<String, List<TrackInterval>> allIntervals = new HashMap<>();
 
         for (Train train : trains) {
-            List<Track>         path      = paths.get(train.getId());
-            List<TrackInterval> intervals = computeIntervals(train, path);
+            List<TrackTraversal> path      = paths.get(train.getId());
+            List<TrackInterval>  intervals = computeIntervals(train, path);
 
             allIntervals.put(train.getId(), intervals);
 
@@ -95,14 +96,16 @@ public class IntervalBuilder {
     // Compute intervals for one train across its full path
     // enterTime and exitTime are LocalDateTime — no epoch conversion
     // ─────────────────────────────────────────────
-    private List<TrackInterval> computeIntervals(Train train, List<Track> path) {
+    private List<TrackInterval> computeIntervals(Train train, List<TrackTraversal> path) {
 
         List<TrackInterval> intervals   = new ArrayList<>();
         LocalDateTime       currentTime = train.getDepartureTime();
 
-        for (Track track : path) {
-            double speedLimit = track.getMinSpeedLimit();
-            int    distance   = track.getDistance();
+        for (TrackTraversal traversal : path) {
+            Track     track     = traversal.getTrack();
+            Direction direction = traversal.getDirection();
+            double    speedLimit = track.getMinSpeedLimit();
+            int       distance   = track.getDistance();
 
             // Spawn track (distance=0) or no speed limit — no travel time, always takes 1 second extra to avoid zero-length intervals
             long travelSeconds = (speedLimit > 0 && distance > 0)
@@ -112,7 +115,7 @@ public class IntervalBuilder {
             LocalDateTime enterTime = currentTime;
             LocalDateTime exitTime  = currentTime.plusSeconds(travelSeconds);
 
-            intervals.add(new TrackInterval(train.getId(), track.getId(), enterTime, exitTime, train.getDirection()));
+            intervals.add(new TrackInterval(train.getId(), track.getId(), enterTime, exitTime, direction));
 
             currentTime = exitTime;
         }
@@ -141,16 +144,20 @@ public class IntervalBuilder {
     }
 
     // Format path as readable string for logging
-    private String pathToString(List<Track> path) {
+    private String pathToString(List<TrackTraversal> path) {
         StringBuilder sb = new StringBuilder();
         for (int i = 0; i < path.size(); i++) {
-            Track t = path.get(i);
-            sb.append(t.getStartNode().getId())
-              .append(" -[")
+            TrackTraversal traversal = path.get(i);
+            Track t = traversal.getTrack();
+            if (i == 0) {
+                sb.append(t.getStartNode().getId());
+            }
+            sb.append(" -[")
               .append(t.getId())
+              .append(" ")
+              .append(traversal.getDirection())
               .append("]-> ")
               .append(t.getEndNode().getId());
-            if (i < path.size() - 1) sb.append(" | ");
         }
         return sb.toString();
     }

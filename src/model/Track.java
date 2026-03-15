@@ -6,6 +6,12 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class Track {
+
+    public enum TrackGeometry {
+        STRAIGHT,
+        CURVE
+    }
+
     private String id;
     private String name;
     private Node startNode;
@@ -17,6 +23,8 @@ public class Track {
     private double minSpeedLimit;
     private double maxSpeedLimit;
     private List<TrainType> allowedTypes;
+    private TrackGeometry geometry;      // STRAIGHT or CURVE, for visualization only
+    private double        curveAngle;    // degrees (0-360), only used if CURVE
 
     public Track() {
         this.inUse = false;
@@ -24,6 +32,8 @@ public class Track {
         this.minSpeedLimit = 0.0;
         this.maxSpeedLimit = 5.0;
         this.allowedTypes = null;
+        this.geometry    = TrackGeometry.STRAIGHT;
+        this.curveAngle  = 0.0;
     }
 
     public Track(String id, String name, Node startNode, Node endNode, int distance, double minSpeedLimit, double maxSpeedLimit) {
@@ -38,6 +48,8 @@ public class Track {
         this.occupiedDirection = null;
         this.inUse = false;
         this.usedBy = new ArrayList<>();
+        this.geometry    = TrackGeometry.STRAIGHT;
+        this.curveAngle  = 0.0;
     }
     public String getId() {
         return this.id;
@@ -53,6 +65,27 @@ public class Track {
 
     public double getMaxSpeedLimit() {
         return this.maxSpeedLimit;
+    }
+
+    public TrackGeometry getGeometry() {
+        return geometry;
+    }
+
+    public void setGeometry(TrackGeometry geometry) {
+        this.geometry = geometry;
+    }
+
+    public double getCurveAngle() {
+        return curveAngle;
+    }
+
+    public void setCurveAngle(double curveAngle) {
+        this.curveAngle = curveAngle;
+    }
+
+    // Convenience — true if this track is curved
+    public boolean isCurve() {
+        return geometry == TrackGeometry.CURVE;
     }
 
     // null or empty = all train types allowed on this track

@@ -9,18 +9,22 @@ public class JunctionNode extends Node {
     private JunctionDirection direction;
 
     public JunctionNode(
-        String id,
-        String name,
-        String primaryNode,
-        String secondaryNode,
-        boolean state,
-        JunctionDirection direction
-    ) {
+            String id,
+            String name,
+            String primaryNode,
+            String secondaryNode,
+            boolean state,
+            JunctionDirection direction) {
         super(id, name);
         this.primaryNode = primaryNode;
         this.secondaryNode = secondaryNode;
         this.state = state;
         this.direction = direction;
+    }
+
+    @Override
+    public String getType() {
+        return "JUNCTION";
     }
 
     public String getPrimaryNode() {

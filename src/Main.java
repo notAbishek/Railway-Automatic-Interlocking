@@ -13,11 +13,10 @@ public class Main {
 
         // Nodes
         Node origin1     = new OriginNode("ORIGIN_T1", "Origin of Train 1");
-        Node origin2     = new OriginNode("ORIGIN_T2", "Origin of Train 2");
-        Node signalNode1 = new SignalNode("1", "Signal 1", Facing.LEFT);
-        Node signalNode2 = new SignalNode("2", "Signal 2", Facing.LEFT);
-        Node signalNode3 = new SignalNode("3", "Signal 3", Facing.LEFT);
-        Node signalNode4 = new SignalNode("4", "Signal 4", Facing.LEFT);
+        Node signalNode1 = new SignalNode("1", "Signal 1");
+        Node signalNode2 = new SignalNode("2", "Signal 2");
+        Node signalNode3 = new SignalNode("3", "Signal 3");
+        Node signalNode4 = new SignalNode("4", "Signal 4");
 
         // Tracks — distance, minSpeedLimit, maxSpeedLimit
         Track track0 = new Track("T0", "Track 0", origin1,     signalNode1, 100,   5,  20);
@@ -35,7 +34,7 @@ public class Main {
         // Trains — speed 0.0 (at station), departure time
         Train train1 = new Train("T1", "Train 1",
             TrainType.PASSENGER, TrainPriority.EXPRESS, track0.getId(),
-            Direction.RIGHT, origin1.getId(), signalNode4.getId(),
+            origin1.getId(), signalNode4.getId(),
             0.0,
             LocalDateTime.parse("25-06-2026 08:00:00", fmt),
             LocalDateTime.parse("25-06-2026 08:02:00", fmt));  // planned arrival
@@ -47,9 +46,15 @@ public class Main {
         // Run IntervalBuilder
         IntervalBuilder intervalBuilder = new IntervalBuilder(graph);
 
-        Map<String, List<Track>>        paths     = intervalBuilder.buildPaths(trains);
-        Map<String, List<TrackInterval>> intervals = intervalBuilder.buildIntervals(trains, paths);
+        Map<String, List<TrackTraversal>> paths     = intervalBuilder.buildPaths(trains);
+        Map<String, List<TrackInterval>>  intervals = intervalBuilder.buildIntervals(trains, paths);
 
         intervalBuilder.printIntervals(intervals);
+
+        // Verification prints
+        System.out.println("Signal 1 protects: "
+            + ((SignalNode) signalNode1).getProtectsTrackId());
+        System.out.println("Track 1 geometry: "
+            + track1.getGeometry());
     }
 }

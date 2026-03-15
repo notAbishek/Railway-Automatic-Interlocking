@@ -16,7 +16,7 @@ public class PathFinder {
     }
 
     // Entry point — picks algorithm based on train priority
-    public List<Track> findPath() {
+    public List<TrackTraversal> findPath() {
         // if (train.getPriority() == TrainPriority.GOODS
         //  || train.getPriority() == TrainPriority.LOCAL) {
         //     return bellmanFord();
@@ -29,16 +29,16 @@ public class PathFinder {
     // weight = distance / trackSpeedLimit (travel time in seconds)
     // no junction limit
     // ─────────────────────────────────────────────
-    private List<Track> dijkstra() {
+    private List<TrackTraversal> dijkstra() {
         String startId = train.getStartNode();
         String endId   = train.getEndNode();
 
         // dist — shortest travel time to each node
-        Map<String, Double> dist     = new HashMap<>();
-        // prev — which track brought us to this node
-        Map<String, Track>  prevTrack = new HashMap<>();
+        Map<String, Double>         dist      = new HashMap<>();
+        // prev — which track+direction brought us to this node
+        Map<String, TrackTraversal> prevTrack = new HashMap<>();
         // visited
-        Set<String>         visited  = new HashSet<>();
+        Set<String>                 visited   = new HashSet<>();
 
         // PriorityQueue — [nodeId, costSoFar]
         PriorityQueue<double[]> pq = new PriorityQueue<>(
@@ -70,7 +70,7 @@ public class PathFinder {
 
             for (Track track : graph.getTracksFrom(currId)) {
                 String neighborId = getNeighbor(track, currId);
-                if (neighborId == null)     continue; // wrong direction
+                if (neighborId == null)     continue; // not connected
                 if (visited.contains(neighborId)) continue;
 
                 double weight  = travelTime(track);
@@ -78,7 +78,10 @@ public class PathFinder {
 
                 if (newCost < dist.get(neighborId)) {
                     dist.put(neighborId, newCost);
-                    prevTrack.put(neighborId, track);
+                    Direction dir = track.getStartNode().getId().equals(currId)
+                        ? Direction.FORWARD
+                        : Direction.REVERSE;
+                    prevTrack.put(neighborId, new TrackTraversal(track, dir));
                     pq.offer(new double[]{
                         nodeIndex.get(neighborId), newCost
                     });
@@ -150,23 +153,21 @@ public class PathFinder {
     // HELPERS
     // ─────────────────────────────────────────────
 
-    // Returns the neighbor node ID based on train direction
-    // Returns null if this track should not be followed
+    // Returns the neighbor node ID based on topology (bidirectional)
+    // Returns null if this track is not connected to currentNodeId
     private String getNeighbor(Track track, String currentNodeId) {
-        if (train.getDirection() == Direction.RIGHT) {
-            // Moving right — only follow if currentNode is startNode
-            if (!track.getStartNode().getId().equals(currentNodeId)) return null;
-        } else {
-            // Moving left — only follow if currentNode is endNode
-            if (!track.getEndNode().getId().equals(currentNodeId)) return null;
+        // Try FORWARD direction (startNode → endNode)
+        if (track.getStartNode().getId().equals(currentNodeId)) {
+            // Track type restriction — null allowedTypes means all trains allowed
+            if (!track.isAllowedFor(train.getType())) return null;
+            return track.getEndNode().getId();
         }
-
-        // Track type restriction — null allowedTypes means all trains allowed
-        if (!track.isAllowedFor(train.getType())) return null;
-
-        return (train.getDirection() == Direction.RIGHT)
-            ? track.getEndNode().getId()
-            : track.getStartNode().getId();
+        // Try REVERSE direction (endNode → startNode)
+        if (track.getEndNode().getId().equals(currentNodeId)) {
+            if (!track.isAllowedFor(train.getType())) return null;
+            return track.getStartNode().getId();
+        }
+        return null;
     }
 
     // Travel time in seconds = distance / minSpeedLimit
@@ -178,19 +179,19 @@ public class PathFinder {
     }
 
     // Reconstruct path by walking prevTrack map backwards from end to start
-    private List<Track> reconstructPath(
-            Map<String, Track> prevTrack,
+    private List<TrackTraversal> reconstructPath(
+            Map<String, TrackTraversal> prevTrack,
             String startId,
             String endId) {
 
-        List<Track> path = new ArrayList<>();
+        List<TrackTraversal> path = new ArrayList<>();
         String current   = endId;
 
         // Walk backwards from end to start
         while (!current.equals(startId)) {
-            Track track = prevTrack.get(current);
+            TrackTraversal traversal = prevTrack.get(current);
 
-            if (track == null) {
+            if (traversal == null) {
                 // No path found
                 System.out.println("WARNING: No path found for train "
                     + train.getId()
@@ -199,12 +200,12 @@ public class PathFinder {
                 return new ArrayList<>();
             }
 
-            path.add(track);
+            path.add(traversal);
 
             // Step back — which node did we come from?
-            current = (train.getDirection() == Direction.RIGHT)
-                ? track.getStartNode().getId()
-                : track.getEndNode().getId();
+            current = (traversal.getDirection() == Direction.FORWARD)
+                ? traversal.getTrack().getStartNode().getId()
+                : traversal.getTrack().getEndNode().getId();
         }
 
         // Path was built end → start, reverse it

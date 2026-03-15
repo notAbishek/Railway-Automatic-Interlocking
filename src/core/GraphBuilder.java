@@ -2,6 +2,7 @@ package core;
 
 import java.util.*;
 import model.Track;
+import model.SignalNode;
 
 public class GraphBuilder {
 
@@ -15,6 +16,16 @@ public class GraphBuilder {
 
         adjacencyList.computeIfAbsent(fromId, k -> new ArrayList<>()).add(track);
         adjacencyList.computeIfAbsent(toId,   k -> new ArrayList<>()).add(track);
+
+        // Auto-assign protectsTrackId on SignalNodes from topology
+        if (track.getStartNode() instanceof SignalNode) {
+            ((SignalNode) track.getStartNode())
+                .setProtectsTrackId(track.getId());
+        }
+        if (track.getEndNode() instanceof SignalNode) {
+            ((SignalNode) track.getEndNode())
+                .setProtectsTrackId(track.getId());
+        }
     }
 
     public List<Track> getTracksFrom(String nodeId) {

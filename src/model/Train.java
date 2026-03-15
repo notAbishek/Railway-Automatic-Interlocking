@@ -9,7 +9,6 @@ public class Train {
     private TrainType type;
     private TrainPriority priority;
     private String trackOnUse;
-    private Direction direction;
     private String startNode;
     private String endNode;
     private double speed;
@@ -24,7 +23,6 @@ public class Train {
         TrainType type,
         TrainPriority priority,
         String trackOnUse,
-        Direction direction,
         String startNode,
         String endNode,
         double speed,
@@ -36,7 +34,6 @@ public class Train {
         this.type          = type;
         this.priority      = priority;
         this.trackOnUse    = trackOnUse;
-        this.direction     = direction;
         this.startNode     = startNode;
         this.endNode       = endNode;
         this.speed         = speed;
@@ -49,7 +46,6 @@ public class Train {
     public TrainType     getType()          { return this.type; }
     public TrainPriority getPriority()      { return this.priority; }
     public String        getTrackOnUse()    { return this.trackOnUse; }
-    public Direction     getDirection()     { return this.direction; }
     public String        getStartNode()     { return this.startNode; }
     public String        getEndNode()       { return this.endNode; }
     public double        getSpeed()         { return this.speed; }
@@ -75,5 +71,7 @@ public class Train {
         }
     }
 
-    
+    public void setTrackOnUse(String trackId)  { this.trackOnUse = trackId; }
+    public void clearTrackOnUse()              { this.trackOnUse = null; }
+
 }
