@@ -1,8 +1,8 @@
 package scheduler;
 
 import core.GraphBuilder;
-import model.*;
 import java.util.*;
+import model.*;
 
 public class TrainScheduler {
 
@@ -17,9 +17,9 @@ public class TrainScheduler {
 
     // Inner class for scheduler results
     public static class SchedulerResult {
-        public final List<Train>                            orderedTrains;
-        public final Map<String, List<TrackTraversal>>      paths;
-        public final Map<String, List<TrackInterval>>       intervals;
+        private final List<Train>                            orderedTrains;
+        private final Map<String, List<TrackTraversal>>      paths;
+        private final Map<String, List<TrackInterval>>       intervals;
 
         public SchedulerResult(
                 List<Train> orderedTrains,
@@ -28,6 +28,18 @@ public class TrainScheduler {
             this.orderedTrains = orderedTrains;
             this.paths         = paths;
             this.intervals     = intervals;
+        }
+
+        public List<Train> getOrderedTrains() {
+            return orderedTrains;
+        }
+
+        public Map<String, List<TrackTraversal>> getPaths() {
+            return paths;
+        }
+
+        public Map<String, List<TrackInterval>> getIntervals() {
+            return intervals;
         }
     }
 

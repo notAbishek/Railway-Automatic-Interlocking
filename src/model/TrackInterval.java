@@ -22,26 +22,6 @@ public final class TrackInterval {
         this.direction = direction;
     }
 
-
-    public boolean conflictsWith(TrackInterval other) {
-        if (!this.trackId.equals(other.trackId)){
-            return false;
-        }
-        if (this.direction == other.direction){
-                return false;
-        }
-        return this.enterTime.isBefore(other.exitTime)
-            && other.enterTime.isBefore(this.exitTime);
-    }
-
-    public LocalDateTime[] getConflictWindow(TrackInterval other) {
-        LocalDateTime start = this.enterTime.isAfter(other.enterTime)
-            ? this.enterTime : other.enterTime;
-        LocalDateTime end   = this.exitTime.isBefore(other.exitTime)
-            ? this.exitTime  : other.exitTime;
-        return new LocalDateTime[]{ start, end };
-    }
-
     // Push this interval forward — used by MeetAndPassResolver
     public void delay(Duration duration) {
         this.enterTime = this.enterTime.plus(duration);

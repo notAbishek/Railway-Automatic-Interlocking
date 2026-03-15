@@ -49,6 +49,7 @@ public class SignalController {
         log(signal, prev, SignalState.RED, "SYSTEM");
     }
 
+    // V2 — not yet called
     // Set YELLOW — next signal is RED
     public void setYellow(SignalNode signal, String trainId) {
         SignalState prev = signal.getState();
@@ -56,6 +57,7 @@ public class SignalController {
         log(signal, prev, SignalState.YELLOW, trainId);
     }
 
+    // V2 — not yet called
     // Set DOUBLE_YELLOW — next signal is YELLOW
     public void setDoubleYellow(SignalNode signal, String trainId) {
         SignalState prev = signal.getState();

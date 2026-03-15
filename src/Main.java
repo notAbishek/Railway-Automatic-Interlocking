@@ -74,7 +74,7 @@ public class Main {
         TrainScheduler.SchedulerResult result = scheduler.schedule(trains);
 
         System.out.println("\n--- DISPATCH ORDER ---");
-        for (Train t : result.orderedTrains) {
+        for (Train t : result.getOrderedTrains()) {
             System.out.println(t.getId()
                 + " | " + t.getPriority()
                 + " | departs: " + t.getDepartureTime().format(fmt)
@@ -87,14 +87,14 @@ public class Main {
 
         // Print intervals
         IntervalBuilder ib = new IntervalBuilder(graph);
-        ib.printIntervals(result.intervals);
+        ib.printIntervals(result.getIntervals());
 
         // --- DISPATCHER (dispatch loop) ---
         ConflictDetector  conflictDetector  = new ConflictDetector();
         SignalController  signalController  = new SignalController();
 
         Dispatcher dispatcher = new Dispatcher();
-        for (Train t : result.orderedTrains) {
+        for (Train t : result.getOrderedTrains()) {
             dispatcher.addTrain(t);
         }
 
@@ -102,7 +102,7 @@ public class Main {
         while (!dispatcher.isEmpty()) {
             Train train = dispatcher.dispatch();
             List<TrackTraversal> path =
-                result.paths.get(train.getId());
+                result.getPaths().get(train.getId());
 
             if (path == null || path.isEmpty()) {
                 System.err.println("No path found for dispatched train "

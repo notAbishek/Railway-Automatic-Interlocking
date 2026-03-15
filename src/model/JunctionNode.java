@@ -42,16 +42,8 @@ public class JunctionNode extends Node {
         return "JUNCTION";
     }
 
-    public String getPrimaryNode() {
-        return primaryNode;
-    }
-
     public String getPrimaryNodeId() {
         return primaryNode;
-    }
-
-    public String getSecondaryNode() {
-        return secondaryNode;
     }
 
     public String getSecondaryNodeId() {

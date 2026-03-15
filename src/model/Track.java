@@ -33,21 +33,6 @@ public class Track {
     private LocalDateTime tsrValidUntil = null;
     // TSR expires at this time. Null if no TSR.
 
-    public Track() {
-        this.id = "";
-        this.name = "";
-        this.startNode = null;
-        this.endNode = null;
-        this.distance = 0;
-        this.inUse = false;
-        this.usedBy = new ArrayList<>();
-        this.minSpeedLimit = 0.0;
-        this.maxSpeedLimit = 5.0;
-        this.allowedTypes = null;
-        this.geometry    = TrackGeometry.STRAIGHT;
-        this.curveAngle  = 0.0;
-    }
-
     public Track(String id, String name, Node startNode, Node endNode, int distance, double minSpeedLimit, double maxSpeedLimit) {
         this.id = id;
         this.name = name;
@@ -133,14 +118,6 @@ public class Track {
 
     public List<String> getUsedBy() {
         return this.usedBy;
-    }
-
-    public void setInUse(boolean inUse) {
-        this.inUse = inUse;
-    }
-
-    public void addUsedBy(String trainId) {
-        this.usedBy.add(trainId);
     }
 
     public Direction getOccupiedDirection() {
