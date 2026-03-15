@@ -4,18 +4,23 @@ import enums.*;
 import java.time.LocalDateTime;
 
 public class Train {
-    private String id;
-    private String name;
-    private TrainType type;
-    private TrainPriority priority;
+    private final String id;
+    private final String name;
+    private final TrainType type;
+    private final TrainPriority priority;
     private String trackOnUse;
     private String startNode;
     private String endNode;
     private double speed;
     private LocalDateTime departureTime;
-    private LocalDateTime arrivalTime;
+    private final LocalDateTime arrivalTime;
     private LocalDateTime actualArrivalTime;
     private double        delayHours;
+    private int     coachCount             = 0;
+    private boolean lastVehicleConfirmed   = false;
+    // set to true when the LV marker of this train passes
+    // a station or signal cabin. If false after train clears
+    // a block, assume train has parted — trigger emergency.
 
     public Train(
         String id,
@@ -73,5 +78,11 @@ public class Train {
 
     public void setTrackOnUse(String trackId)  { this.trackOnUse = trackId; }
     public void clearTrackOnUse()              { this.trackOnUse = null; }
+
+    public int     getCoachCount()           { return coachCount; }
+    public void    setCoachCount(int n)      { this.coachCount = n; }
+    public boolean isLastVehicleConfirmed()  { return lastVehicleConfirmed; }
+    public void    confirmLastVehicle()      { this.lastVehicleConfirmed = true; }
+    public void    resetLastVehicle()        { this.lastVehicleConfirmed = false; }
 
 }

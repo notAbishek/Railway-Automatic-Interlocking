@@ -261,6 +261,13 @@ Code rule:
    before trains depart. But if a train is already moving
    and a new conflict arises, braking distance matters.
    This system does not model braking physics in V1.
+
+7. Automatic block pass protocol
+  When an automatic stop signal (marked 'A') remains RED for
+  more than 2 minutes, IR rules allow a train to pass it at
+  15 km/h after coming to a standstill.
+  This system currently holds the train indefinitely at RED.
+  Requires: isAutomatic flag on SignalNode + wait timer (V2).
 ```
 
 ---

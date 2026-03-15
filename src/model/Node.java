@@ -1,8 +1,8 @@
 package model;
 
 public abstract class Node {
-    final protected String id;
-    final protected String name;
+    private final String id;
+    private final String name;
     protected double x;
     protected double y;
 

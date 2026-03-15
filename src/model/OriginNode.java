@@ -7,7 +7,7 @@ public class OriginNode extends Node {
     }
 
     @Override
-    public String getType() {
+    public final String getType() {
         return "ORIGIN";
     }
 }

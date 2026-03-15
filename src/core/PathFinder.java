@@ -11,6 +11,12 @@ public class PathFinder {
     private final GraphBuilder graph;
 
     public PathFinder(Train train, GraphBuilder graph) {
+        if (train == null) {
+            throw new IllegalArgumentException("Train is null");
+        }
+        if (graph == null) {
+            throw new IllegalArgumentException("Graph is null");
+        }
         this.train = train;
         this.graph = graph;
     }

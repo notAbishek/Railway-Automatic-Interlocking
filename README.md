@@ -324,29 +324,32 @@ interlocking/
 │   │
 │   ├── model/
 │   │   ├── Node.java               ✓  abstract: id, name
-│   │   ├── SignalNode.java         ✓  state, facing
+│   │   ├── SignalNode.java         ✓  state, type, repeater link
 │   │   ├── JunctionNode.java       ✓  state, direction, primaryNode, secondaryNode
-│   │   ├── StationNode.java        ✓  stationCode, platformCount
 │   │   ├── OriginNode.java         ✓  virtual spawn node
 │   │   ├── Track.java              ✓  id, name, startNode, endNode, distance,
 │   │   │                               minSpeedLimit, maxSpeedLimit,
 │   │   │                               inUse, usedBy, occupiedDirection,
-│   │   │                               reserve(), release()
+│   │   │                               reserve(), release(), TSR fields
+│   │   │                               (TrackGeometry inner enum: STRAIGHT, CURVE)
 │   │   ├── Train.java              ✓  id, name, type, priority, direction,
 │   │   │                               startNode, endNode, speed, trackOnUse,
 │   │   │                               departureTime, arrivalTime,
-│   │   │                               actualArrivalTime, delayHours
-│   │   └── TrackInterval.java      ✓  trainId, trackId, enterTime, exitTime,
-│   │                                   direction, conflictsWith(), delay(Duration),
-│   │                                   getConflictWindow(), getOccupancyDuration()
+│   │   │                               actualArrivalTime, delayHours, LV fields
+│   │   ├── TrackInterval.java      ✓  trainId, trackId, enterTime, exitTime,
+│   │   │                               direction, conflictsWith(), delay(Duration),
+│   │   │                               getConflictWindow(), getOccupancyDuration()
+│   │   ├── TrackTraversal.java     ✓  track + direction wrapper
+│   │   ├── SignalState.java        ✓  RED, YELLOW, DOUBLE_YELLOW, GREEN
+│   │   └── TrainPriority.java      ✓  EXPRESS, PASSENGER_EXP, GOODS, LOCAL
 │   │
 │   ├── enums/
-│   │   ├── SignalState.java        ✓  RED, YELLOW, DOUBLE_YELLOW, GREEN
-│   │   ├── Facing.java             ✓  RIGHT, LEFT
 │   │   ├── Direction.java          ✓  RIGHT, LEFT
+│   │   ├── JunctionDirection.java  ✓  RIGHT, LEFT
 │   │   ├── JunctionState.java      ✓  PRIMARY, SECONDARY
+│   │   ├── Priority.java           ✓  HIGH, MEDIUM, LOW
 │   │   ├── TrainType.java          ✓  EMU, ENGINE, GOODS, PASSENGER
-│   │   └── TrainPriority.java      ✓  EXPRESS, PASSENGER_EXP, GOODS, LOCAL
+│   │   └── SignalType.java         ✓  GENERIC, HOME, STARTER, SHUNT, etc.
 │   │
 │   ├── core/
 │   │   ├── GraphBuilder.java       ✓  HashMap<String, List<Track>>
@@ -360,38 +363,33 @@ interlocking/
 │   │   ├── Dispatcher.java         ✓  PriorityQueue<Train>
 │   │   │                               sort: time → priority → type → id
 │   │   │                               addTrain() — replaces past departure time
-│   │   └── ConflictDetector.java   ⬜  orchestrates all conflict checks
+│   │   └── ConflictDetector.java   ✓  orchestrates all conflict checks
 │   │
 │   ├── conflict/
-│   │   ├── TimeWindowConflict.java ⬜  opposite direction time overlap
-│   │   ├── HeadOnConflict.java     ⬜  opposite direction, same track, runtime
-│   │   ├── FollowingConflict.java  ⬜  same direction, one behind another
-│   │   └── DeadlockDetector.java   ⬜  cycle detection — currentPath + visited
+│   │   ├── TimeWindowConflict.java ✓  opposite direction time overlap
+│   │   ├── HeadOnConflict.java     ✓  opposite direction runtime check
+│   │   ├── FollowingConflict.java  ✓  same direction runtime check
+│   │   ├── DeadlockDetector.java   ✓  cycle detection, two HashSets
+│   │   └── ShuntingResolver.java   ✓  BFS state space, circular deadlock
 │   │
 │   ├── signal/
-│   │   ├── SignalController.java   ⬜  sets RED/YELLOW/DOUBLE_YELLOW/GREEN
-│   │   └── SignalRule.java         ⬜  fail-safe rules, 4 GREEN conditions
+│   │   ├── SignalController.java   ✓  only class that calls setState()
+│   │   └── SignalRule.java         ✓  5-condition GREEN check
 │   │
 │   ├── scheduler/
-│   │   ├── TrainScheduler.java     ⬜  orchestrates all pre-dispatch steps
+│   │   ├── TrainScheduler.java     ✓  orchestrates all pre-dispatch steps
 │   │   ├── IntervalBuilder.java    ✓  buildPaths() — PathFinder for all trains
 │   │   │                               buildIntervals() — TrackInterval per track
 │   │   │                               computeIntervals() — LocalDateTime based
 │   │   │                               sets actualArrivalTime + delayHours
-│   │   ├── DependencyResolver.java ⬜  same direction blocking → topo sort
-│   │   └── MeetAndPassResolver.java⬜  opposite direction → delay lower priority
+│   │   ├── DependencyResolver.java ✓  blocking detection, topo sort
+│   │   └── MeetAndPassResolver.java ✓  opposite direction delay resolution
 │   │
 │   ├── db/
-│   │   ├── DatabaseLayer.java      ⬜  PostgreSQL CRUD (V2)
+│   │   ├── DatabaseLayer.java      ✓  PostgreSQL layer scaffold (V2)
 │   │   └── schema.sql              ✓  3NF schema
 │   │
-│   └── Main.java                   ~  bootstrap and test data
-│
-├── test/
-│   ├── GraphBuilderTest.java       ⬜
-│   ├── PathFinderTest.java         ⬜
-│   ├── ConflictDetectorTest.java   ⬜
-│   └── SchedulerTest.java          ⬜
+│   └── Main.java                   ✓  scheduler + simulation loop
 │
 ├── README.md
 └── LICENSE
@@ -558,21 +556,22 @@ CREATE TABLE trains (
 ## Build Order
 
 ```
-Done  ✓   Node, SignalNode, JunctionNode, StationNode, OriginNode
-Done  ✓   Track, Train, TrackInterval
+Done  ✓   All model files
 Done  ✓   All enums
-Done  ✓   GraphBuilder
-Done  ✓   PathFinder  (Dijkstra + Bellman-Ford)
-Done  ✓   Dispatcher
+Done  ✓   GraphBuilder, PathFinder, Dispatcher
 Done  ✓   IntervalBuilder
+Done  ✓   All conflict/ files
+Done  ✓   DependencyResolver, MeetAndPassResolver, TrainScheduler
+Done  ✓   SignalController, SignalRule
+Done  ✓   ConflictDetector
+Done  ✓   Main.java simulation loop
 
-Next  →   DependencyResolver
-Then  →   MeetAndPassResolver
-Then  →   TrainScheduler
-Then  →   ConflictDetector
-Then  →   SignalController + SignalRule
-Then  →   Wire everything in Main
-Last  →   Tests, then DB layer (V2)
+V2    →   DatabaseLayer (PostgreSQL)
+V2    →   Automatic block pass protocol (1-2 min wait timer)
+V2    →   Gradient safety for shunting
+V2    →   Spring Boot REST API
+V3    →   GraphStream visualization
+V3    →   React + WebSocket live map
 ```
 
 ---

@@ -4,10 +4,13 @@ import enums.SignalType;
 
 public class SignalNode extends Node {
     private SignalState state = SignalState.RED;
-    private SignalType signalType;
+    private final SignalType signalType;
     private String protectsTrackId;   // set by GraphBuilder, never by user
     private String stationCode; // null if not a station-boundary signal
     private int platformCount; // 0 if not applicable
+    private String repeatsSignalId = null;
+    // non-null only if signalType == REPEATING
+    // stores the ID of the signal this repeater mirrors
 
     public SignalNode(String id, String name) {
         super(id, name);
@@ -34,7 +37,7 @@ public class SignalNode extends Node {
     }
 
     @Override
-    public String getType() {
+    public final String getType() {
         return "SIGNAL";
     }
 
@@ -72,6 +75,13 @@ public class SignalNode extends Node {
 
     public void setState(SignalState state) {
         this.state = state;
+    }
+
+    public String getRepeatsSignalId() { return repeatsSignalId; }
+    public void   setRepeatsSignalId(String id) { this.repeatsSignalId = id; }
+
+    public boolean isRepeater() {
+        return signalType == SignalType.REPEATING;
     }
 
 }

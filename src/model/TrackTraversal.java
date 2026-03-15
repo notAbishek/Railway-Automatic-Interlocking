@@ -2,7 +2,7 @@ package model;
 
 import enums.Direction;
 
-public class TrackTraversal {
+public final class TrackTraversal {
     private final Track     track;
     private final Direction direction;  // FORWARD or REVERSE, derived by PathFinder
 

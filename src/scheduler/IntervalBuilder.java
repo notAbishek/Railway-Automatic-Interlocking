@@ -36,8 +36,9 @@ public class IntervalBuilder {
             if (path.isEmpty()) {
                 throw new IllegalStateException(
                     "No path found for train " + train.getId()
-                    + " | from: " + train.getStartNode()
-                    + " | to: "   + train.getEndNode()
+                    + " from " + train.getStartNode()
+                    + " to "   + train.getEndNode()
+                    + " - check that nodes exist in graph and direction is correct"
                 );
             }
 

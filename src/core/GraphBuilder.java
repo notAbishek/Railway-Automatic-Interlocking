@@ -1,8 +1,8 @@
 package core;
 
 import java.util.*;
-import model.Track;
 import model.SignalNode;
+import model.Track;
 
 public class GraphBuilder {
 
@@ -11,6 +11,14 @@ public class GraphBuilder {
     public GraphBuilder() {}
 
     public void addTrack(Track track) {
+        if (track == null) {
+            throw new IllegalArgumentException("Track cannot be null");
+        }
+        if (track.getStartNode() == null || track.getEndNode() == null) {
+            throw new IllegalArgumentException(
+                "Track " + track.getId() + " has null start or end node");
+        }
+
         String fromId = track.getStartNode().getId();
         String toId   = track.getEndNode().getId();
 

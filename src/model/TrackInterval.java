@@ -5,12 +5,12 @@ import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 
-public class TrackInterval {
-    private String        trainId;
-    private String        trackId;
+public final class TrackInterval {
+    private final String        trainId;
+    private final String        trackId;
     private LocalDateTime enterTime;
     private LocalDateTime exitTime;
-    private Direction     direction;
+    private final Direction     direction;
 
     private static final DateTimeFormatter FMT = DateTimeFormatter.ofPattern("dd-MM-yyyy HH:mm:ss");
 

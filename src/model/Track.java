@@ -2,6 +2,7 @@ package model;
 
 import enums.Direction;
 import enums.TrainType;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -12,21 +13,32 @@ public class Track {
         CURVE
     }
 
-    private String id;
-    private String name;
-    private Node startNode;
-    private Node endNode;
-    private int distance;
+    private final String id;
+    private final String name;
+    private final Node startNode;
+    private final Node endNode;
+    private final int distance;
     private boolean inUse;
-    private List<String> usedBy;
+    private final List<String> usedBy;
     private Direction occupiedDirection;
-    private double minSpeedLimit;
-    private double maxSpeedLimit;
+    private final double minSpeedLimit;
+    private final double maxSpeedLimit;
     private List<TrainType> allowedTypes;
     private TrackGeometry geometry;      // STRAIGHT or CURVE, for visualization only
     private double        curveAngle;    // degrees (0-360), only used if CURVE
+    private double  overlapMetres       = 180.0;
+    // IR MACL rule: 180m ahead of signal must be clear before GREEN
+    private Double  temporarySpeedLimit = null;
+    // null = no TSR. Set when engineering work or track defect exists.
+    private LocalDateTime tsrValidUntil = null;
+    // TSR expires at this time. Null if no TSR.
 
     public Track() {
+        this.id = "";
+        this.name = "";
+        this.startNode = null;
+        this.endNode = null;
+        this.distance = 0;
         this.inUse = false;
         this.usedBy = new ArrayList<>();
         this.minSpeedLimit = 0.0;
@@ -133,6 +145,55 @@ public class Track {
 
     public Direction getOccupiedDirection() {
         return this.occupiedDirection;
+    }
+
+    public void reserve(String trainId, Direction direction) {
+        if (trainId == null || trainId.isEmpty()) {
+            throw new IllegalArgumentException("trainId cannot be null or empty");
+        }
+        if (direction == null) {
+            throw new IllegalArgumentException("direction cannot be null");
+        }
+
+        this.inUse = true;
+        this.usedBy.add(trainId);
+        this.occupiedDirection = direction;
+    }
+
+    public void release(String trainId) {
+        this.usedBy.remove(trainId);
+        if (this.usedBy.isEmpty()) {
+            this.inUse = false;
+            this.occupiedDirection = null;
+        }
+    }
+
+    public double getOverlapMetres() { return overlapMetres; }
+    public void setOverlapMetres(double m) { this.overlapMetres = m; }
+
+    public void setTemporarySpeedRestriction(double speed,
+                                              LocalDateTime until) {
+        this.temporarySpeedLimit = speed;
+        this.tsrValidUntil       = until;
+    }
+
+    public void clearTemporarySpeedRestriction() {
+        this.temporarySpeedLimit = null;
+        this.tsrValidUntil       = null;
+    }
+
+    public double getEffectiveMaxSpeed() {
+        if (temporarySpeedLimit != null && tsrValidUntil != null
+         && LocalDateTime.now().isBefore(tsrValidUntil)) {
+            return Math.min(maxSpeedLimit, temporarySpeedLimit);
+        }
+        return maxSpeedLimit;
+    }
+
+    public boolean hasTSR() {
+        return temporarySpeedLimit != null
+            && tsrValidUntil != null
+            && LocalDateTime.now().isBefore(tsrValidUntil);
     }
 
 }

@@ -1,12 +1,10 @@
 // Dispatcher.java
 package core;
 
-import enums.*;
-import model.Train;
-
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.PriorityQueue;
+import model.Train;
 
 public class Dispatcher {
 
@@ -37,6 +35,10 @@ public class Dispatcher {
     }
 
     public void addTrain(Train train) {
+        if (train == null) {
+            throw new IllegalArgumentException("Cannot add null train");
+        }
+
         LocalDateTime now = LocalDateTime.now();
 
         // If departure time is in the past — replace with current time
