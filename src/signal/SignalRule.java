@@ -2,20 +2,20 @@ package signal;
 
 import conflict.DeadlockDetector;
 import conflict.HeadOnConflict;
-import java.util.Map;
+import core.MovementContext;
 import model.*;
 
 public final class SignalRule {
 
     // Condition 1: track not in use
     private boolean isTrackFree(Track track) {
-        return !track.isInUse() && track.getUsedBy().isEmpty();
+        return !track.isInUse();
     }
 
     // Condition 2: no cycle in reservation graph
-    private boolean isDeadlockFree(String trainId,
-                                   Map<String, String> blockedBy) {
-        return !new DeadlockDetector().hasCycle(trainId, blockedBy);
+    private boolean isDeadlockFree(MovementContext context) {
+        return !new DeadlockDetector().hasCycle(
+            context.getTrainId(), context.getBlockedBy());
     }
 
     // Condition 3: no opposite direction train on track
@@ -24,12 +24,19 @@ public final class SignalRule {
         return !new HeadOnConflict().isHeadOn(track, traversal);
     }
 
-    // Condition 4: overlap zone (180m ahead) is clear
-    // For V1 — check the NEXT track in the path is also free
-    public boolean isOverlapClear(Track currentTrack,
-                                   Track nextTrack) {
-        if (nextTrack == null) return true;  // last track in path
-        return !nextTrack.isInUse();
+    // Condition 4: overlap/fouling envelope is clear
+    public boolean isOverlapClear(MovementContext context,
+                                   Track currentTrack,
+                                   Track nextTrack,
+                                   JunctionNode junction) {
+        if (context == null) {
+            return false;
+        }
+        if (!context.isOverlapClear()) {
+            return false;
+        }
+        return context.getAvailableClearanceMetres()
+            >= context.getRequiredClearanceMetres();
     }
 
     // Condition 5: junction on route is not isolated by another train
@@ -43,13 +50,12 @@ public final class SignalRule {
                                 Track nextTrack,
                                 TrackTraversal traversal,
                                 JunctionNode junction,
-                                String trainId,
-                                Map<String, String> blockedBy) {
+                                MovementContext context) {
         // IR interlocking principle: do not clear signal unless route checks pass.
         return isTrackFree(track)
             && isDirectionClear(track, traversal)
-            && isOverlapClear(track, nextTrack)
+            && isOverlapClear(context, track, nextTrack, junction)
             && isJunctionAvailable(junction)
-            && isDeadlockFree(trainId, blockedBy);
+            && isDeadlockFree(context);
     }
 }

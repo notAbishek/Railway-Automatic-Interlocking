@@ -7,10 +7,9 @@ import model.TrackInterval;
 public final class TimeWindowConflict {
 
     // Returns true if two TrackIntervals conflict:
-    // same track + opposite direction + time overlap
+    // same track + any time overlap (absolute block exclusivity)
     public boolean hasConflict(TrackInterval a, TrackInterval b) {
         if (!a.getTrackId().equals(b.getTrackId())) return false;
-        if (a.getDirection() == b.getDirection()) return false;
         return a.getEnterTime().isBefore(b.getExitTime())
             && b.getEnterTime().isBefore(a.getExitTime());
     }

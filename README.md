@@ -11,6 +11,20 @@ javac -d out -sourcepath src src\Main.java
 java -cp out Main
 ```
 
+## Running Tests
+
+```bash
+javac -d out -sourcepath src src\test\InterlockingTest.java
+java -cp out test.InterlockingTest
+```
+
+## Running Stress Tests
+
+```bash
+javac -d out -sourcepath src src\test\InterlockingStressTest.java
+java -cp out test.InterlockingStressTest
+```
+
 ---
 
 ## Architecture
@@ -71,6 +85,20 @@ The scheduler computes paths and occupancy intervals before dispatch so conflict
 
 ---
 
+## Phase 1-3 Safety Refactor Status
+
+The following safety upgrades are now implemented in code and covered by tests:
+
+- Temporal occupancy model with exclusive single-track reservation (`Reservation`) and absolute block enforcement on every `Track`.
+- Time-window conflict logic now blocks any overlap on the same track, including same-direction tailgating.
+- Junction point-lock integrity: turnout state changes are rejected while the junction is isolated.
+- Shared movement authorization context (`MovementContext`) is passed through conflict and signal decision chains.
+- Geometric overlap and fouling envelope checks gate movement authority.
+- Fail-safe signal cascade: RED transitions propagate atomically from a parent signal to all linked repeaters.
+- Extended regression and stress suites include accident-inspired conflict scenarios and randomized edge testing.
+
+---
+
 ## Algorithm Stack
 
 | Problem | Algorithm |
@@ -79,7 +107,7 @@ The scheduler computes paths and occupancy intervals before dispatch so conflict
 | Route finding | Dijkstra |
 | Deadlock detection | DFS cycle detection |
 | Blocking precedence | Topological sort |
-| Opposing traffic timing | Interval overlap and delay propagation |
+| Block occupancy timing | Interval overlap and delay propagation |
 | Circular shunting fallback | BFS state search |
 
 ## Indian Railways Standards Compliance
@@ -127,6 +155,7 @@ src/
     ConflictDetector.java
     Dispatcher.java
     GraphBuilder.java
+    MovementContext.java
     PathFinder.java
   db/
     DatabaseLayer.java
@@ -141,6 +170,7 @@ src/
     JunctionNode.java
     Node.java
     OriginNode.java
+    Reservation.java
     SignalNode.java
     SignalState.java
     Track.java
@@ -158,6 +188,7 @@ src/
     SignalRule.java
   test/
     InterlockingTest.java
+    InterlockingStressTest.java
 ```
 
 ---

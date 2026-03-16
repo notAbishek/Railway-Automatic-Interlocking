@@ -130,21 +130,21 @@ public class Main {
                     signal = (SignalNode) track.getStartNode();
                 }
 
-                boolean safe = conflictDetector.check(
+                MovementContext context = conflictDetector.assess(
                     track, nextTrack, traversal, junction, train);
+                boolean safe = context.isSafeToProceed();
 
                 if (safe) {
                     boolean cleared = true;
                     if (signal != null) {
                         cleared = signalController.requestGreen(
                             signal, track, nextTrack, traversal,
-                            junction, train.getId(),
-                            new HashMap<>(), graph);
+                            junction, context, graph);
                     }
 
                     if (!cleared) {
                         if (signal != null) {
-                            signalController.setRed(signal);
+                            signalController.setRed(signal, graph);
                         }
                         System.out.println("  HELD at " + track.getId()
                             + " — signal did not clear");
@@ -155,7 +155,8 @@ public class Main {
                     conflictDetector.onTrackEntry(
                         train, track, traversal, junction);
                     if (signal != null) {
-                        signalController.validateSpeed(train, track, signal);
+                        signalController.validateSpeed(train, track,
+                            signal, graph);
                     }
                     System.out.println("  ENTER: " + track.getId()
                         + " [" + traversal.getDirection() + "]");
@@ -163,7 +164,7 @@ public class Main {
                     System.out.println("  EXIT:  " + track.getId());
                 } else {
                     if (signal != null) {
-                        signalController.setRed(signal);
+                        signalController.setRed(signal, graph);
                     }
                     System.out.println("  HELD at " + track.getId()
                         + " — conflict detected");

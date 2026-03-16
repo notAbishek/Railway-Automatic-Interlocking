@@ -1,0 +1,60 @@
+=== INTERLOCKING TEST SUITE ===
+
+PASS - testGraphBuilderAddsNodes
+PASS - testPathFinderStraightLine
+PASS - testPathFinderReverseDirection
+WARNING: No path found for train TR3 from S1 to S2
+PASS - testAllowedTypesFilter
+PASS - testTrackReserveAndRelease
+PASS - testJunctionIsolation
+PASS - testHeadOnConflict
+PASS - testFollowingConflict
+PASS - testNoConflictWhenFree
+PASS - testDeadlockDetectorCycle
+PASS - testDeadlockDetectorNoCycle
+PASS - testTimeWindowConflictOverlap
+PASS - testTimeWindowNoConflict
+PASS - testSignalDefaultRed
+PASS - testSignalRuleAllConditionsPass
+PASS - testSignalRuleFailsIfTrackInUse
+PASS - testTSREffectiveSpeed
+PASS - testOverlapDefault
+PASS - testLastVehicleConfirmation
+PASS - testShuntingResolverSimple
+PASS - testDispatcherTimeOrderFirst
+PASS - testDispatcherPriorityTiebreak
+[CONFLICT] 2026-03-16T21:07:12.121824400 | DERAILMENT BLOCK | train: TRD | location: JCT
+PASS - testJunctionTrailingFromDivergingDerailsWhenInactive
+[CONFLICT] 2026-03-16T21:07:12.123825100 | DERAILMENT BLOCK | train: TRS | location: JCT2
+PASS - testJunctionTrailingFromStraightDerailsWhenActive
+PASS - testJunctionFacingMovementRoutesByState
+PASS - testJunctionSetStateRejectedWhenIsolated
+PASS - testJunctionReleaseAfterClearanceUsesFoulingDistance
+[CONFLICT] 2026-03-16T21:07:12.123825100 | OVERLAP NOT CLEAR | train: TR_OV | location: T_OV1
+PASS - testConflictDetectorOverlapEnvelopeBlocksUnsafeRoute
+[SIGNAL] 2026-03-16T21:07:12.125825300 | S_REP | GREEN → RED | by: SYSTEM | protects: T_PR
+[SIGNAL] 2026-03-16T21:07:12.126825100 | S_PARENT | GREEN → RED | by: SYSTEM | protects: T_PO
+PASS - testSignalRedCascadesToRepeater
+PASS - testReservationRejectsInvalidTimeWindow
+PASS - testReservationWrongTrainCannotRelease
+PASS - testTimeWindowTouchingBoundaryNoConflict
+PASS - testOverlapEnvelopeAtExactBoundaryPasses
+[SIGNAL] 2026-03-16T21:07:12.126825100 | SG_REP | GREEN → RED | by: SYSTEM | protects: SG_REP_LINK
+[SIGNAL] 2026-03-16T21:07:12.126825100 | SG_PARENT | GREEN → RED | by: SYSTEM | protects: SG_REP_LINK
+PASS - testSignalRequestGreenFailureCascadesRedToRepeater
+MEET-AND-PASS: MPB delayed 481s on TRACK_MP
+PASS - testMeetAndPassDelaysSameDirectionOverlap
+PASS - testDependencyResolverOrdersBlockedTrainAfterHolder
+[CONFLICT] 2026-03-16T21:07:12.131824200 | HEAD-ON CONFLICT | train: TRAIN_NEW | location: AHT
+PASS - testAssessHeadOnSetsDenialReasonAndBlocker
+[CONFLICT] 2026-03-16T21:07:12.131824200 | FOLLOWING CONFLICT | train: TRAIN_NEW2 | location: AFT
+PASS - testAssessFollowingSetsDenialReasonAndBlocker
+[CONFLICT] 2026-03-16T21:07:12.131824200 | WARNING: last vehicle not confirmed for JL_TR | train: JL_TR | location: JL_T
+[CONFLICT] 2026-03-16T21:07:12.132824900 | JUNCTION ISOLATED | train: JL_TR | location: JL_J
+PASS - testAssessRejectsWhenJunctionStillLockedAfterShortClearance
+[CONFLICT] 2026-03-16T21:07:12.132824900 | OVERLAP NOT CLEAR | train: AC_TR | location: AC_APP
+PASS - testAccidentLikeWrongRouteIntoShortOccupiedEnvelopeBlocked
+[CONFLICT] 2026-03-16T21:07:12.132824900 | HEAD-ON CONFLICT | train: TRAIN_DOWN | location: SL_T
+PASS - testAccidentLikeSingleLineOppositeMovementsSecondTrainHeld
+
+=== TEST SUITE COMPLETE ===

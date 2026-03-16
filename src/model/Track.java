@@ -3,7 +3,6 @@ package model;
 import enums.Direction;
 import enums.TrainType;
 import java.time.LocalDateTime;
-import java.util.ArrayList;
 import java.util.List;
 
 public class Track {
@@ -18,9 +17,7 @@ public class Track {
     private final Node startNode;
     private final Node endNode;
     private final int distance;
-    private boolean inUse;
-    private final List<String> usedBy;
-    private Direction occupiedDirection;
+    private Reservation activeReservation;
     private final double minSpeedLimit;
     private final double maxSpeedLimit;
     private List<TrainType> allowedTypes;
@@ -42,9 +39,7 @@ public class Track {
         this.minSpeedLimit = minSpeedLimit;
         this.maxSpeedLimit = maxSpeedLimit;
         this.allowedTypes = null;
-        this.occupiedDirection = null;
-        this.inUse = false;
-        this.usedBy = new ArrayList<>();
+        this.activeReservation = null;
         this.geometry    = TrackGeometry.STRAIGHT;
         this.curveAngle  = 0.0;
     }
@@ -113,35 +108,37 @@ public class Track {
     }
 
     public boolean isInUse() {
-        return this.inUse;
+        return this.activeReservation != null;
     }
 
-    public List<String> getUsedBy() {
-        return this.usedBy;
+    public Reservation getActiveReservation() {
+        return this.activeReservation;
     }
 
-    public Direction getOccupiedDirection() {
-        return this.occupiedDirection;
-    }
-
-    public void reserve(String trainId, Direction direction) {
-        if (trainId == null || trainId.isEmpty()) {
-            throw new IllegalArgumentException("trainId cannot be null or empty");
+    public void reserve(Reservation reservation) {
+        if (reservation == null) {
+            throw new IllegalArgumentException("reservation cannot be null");
         }
-        if (direction == null) {
-            throw new IllegalArgumentException("direction cannot be null");
+        if (this.activeReservation != null) {
+            throw new IllegalStateException(
+                "Track " + this.id + " already reserved by "
+                + this.activeReservation.trainId());
         }
+        this.activeReservation = reservation;
+    }
 
-        this.inUse = true;
-        this.usedBy.add(trainId);
-        this.occupiedDirection = direction;
+    public void reserve(String trainId, Direction direction,
+                         long enterTime, long expectedExitTime) {
+        reserve(new Reservation(trainId, direction, enterTime,
+            expectedExitTime));
     }
 
     public void release(String trainId) {
-        this.usedBy.remove(trainId);
-        if (this.usedBy.isEmpty()) {
-            this.inUse = false;
-            this.occupiedDirection = null;
+        if (this.activeReservation == null) {
+            return;
+        }
+        if (this.activeReservation.trainId().equals(trainId)) {
+            this.activeReservation = null;
         }
     }
 

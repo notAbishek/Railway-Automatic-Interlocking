@@ -35,12 +35,10 @@ public class DependencyResolver {
             for (TrackTraversal traversal : path) {
                 Track track = traversal.getTrack();
                 if (track.isInUse()) {
-                    List<String> users = track.getUsedBy();
-                    for (String userId : users) {
-                        if (!userId.equals(train.getId())) {
-                            blockedBy.put(train.getId(), userId);
-                            break;
-                        }
+                    Reservation reservation = track.getActiveReservation();
+                    if (reservation != null
+                            && !reservation.trainId().equals(train.getId())) {
+                        blockedBy.put(train.getId(), reservation.trainId());
                     }
                 }
                 if (blockedBy.containsKey(train.getId())) break;

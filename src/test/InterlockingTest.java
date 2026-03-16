@@ -29,6 +29,22 @@ public class InterlockingTest {
         testJunctionTrailingFromDivergingDerailsWhenInactive();
         testJunctionTrailingFromStraightDerailsWhenActive();
         testJunctionFacingMovementRoutesByState();
+        testJunctionSetStateRejectedWhenIsolated();
+        testJunctionReleaseAfterClearanceUsesFoulingDistance();
+        testConflictDetectorOverlapEnvelopeBlocksUnsafeRoute();
+        testSignalRedCascadesToRepeater();
+        testReservationRejectsInvalidTimeWindow();
+        testReservationWrongTrainCannotRelease();
+        testTimeWindowTouchingBoundaryNoConflict();
+        testOverlapEnvelopeAtExactBoundaryPasses();
+        testSignalRequestGreenFailureCascadesRedToRepeater();
+        testMeetAndPassDelaysSameDirectionOverlap();
+        testDependencyResolverOrdersBlockedTrainAfterHolder();
+        testAssessHeadOnSetsDenialReasonAndBlocker();
+        testAssessFollowingSetsDenialReasonAndBlocker();
+        testAssessRejectsWhenJunctionStillLockedAfterShortClearance();
+        testAccidentLikeWrongRouteIntoShortOccupiedEnvelopeBlocked();
+        testAccidentLikeSingleLineOppositeMovementsSecondTrainHeld();
 
         System.out.println("\n=== TEST SUITE COMPLETE ===");
     }
@@ -124,20 +140,29 @@ public class InterlockingTest {
         model.SignalNode s2 = new model.SignalNode("S2", "S2");
         model.Track t = new model.Track("T1", "T1", s1, s2, 100, 10, 30);
 
-        boolean initiallyFree = !t.isInUse() && t.getUsedBy().isEmpty();
+        long now = java.time.Instant.now().getEpochSecond();
+        boolean initiallyFree = !t.isInUse() && t.getActiveReservation() == null;
 
-        t.reserve("TRAIN_A", enums.Direction.FORWARD);
+        t.reserve("TRAIN_A", enums.Direction.FORWARD, now, now + 10);
         boolean afterReserve = t.isInUse()
-            && t.getUsedBy().contains("TRAIN_A")
-            && t.getOccupiedDirection() == enums.Direction.FORWARD;
+            && t.getActiveReservation() != null
+            && t.getActiveReservation().trainId().equals("TRAIN_A")
+            && t.getActiveReservation().direction() == enums.Direction.FORWARD;
+
+        boolean secondReservationRejected = false;
+        try {
+            t.reserve("TRAIN_B", enums.Direction.REVERSE, now, now + 20);
+        } catch (IllegalStateException ex) {
+            secondReservationRejected = true;
+        }
 
         t.release("TRAIN_A");
         boolean afterRelease = !t.isInUse()
-            && t.getUsedBy().isEmpty()
-            && t.getOccupiedDirection() == null;
+            && t.getActiveReservation() == null;
 
         printResult("testTrackReserveAndRelease",
-            initiallyFree && afterReserve && afterRelease);
+            initiallyFree && afterReserve
+            && secondReservationRejected && afterRelease);
     }
 
     // -- TEST 6 -------------------------------
@@ -160,7 +185,8 @@ public class InterlockingTest {
         model.SignalNode s1 = new model.SignalNode("S1", "S1");
         model.SignalNode s2 = new model.SignalNode("S2", "S2");
         model.Track t = new model.Track("T1", "T1", s1, s2, 100, 10, 30);
-        t.reserve("TRAIN_A", enums.Direction.FORWARD);
+        long now = java.time.Instant.now().getEpochSecond();
+        t.reserve("TRAIN_A", enums.Direction.FORWARD, now, now + 10);
 
         model.TrackTraversal reverseTraversal =
             new model.TrackTraversal(t, enums.Direction.REVERSE);
@@ -175,7 +201,8 @@ public class InterlockingTest {
         model.SignalNode s1 = new model.SignalNode("S1", "S1");
         model.SignalNode s2 = new model.SignalNode("S2", "S2");
         model.Track t = new model.Track("T1", "T1", s1, s2, 100, 10, 30);
-        t.reserve("TRAIN_A", enums.Direction.FORWARD);
+        long now = java.time.Instant.now().getEpochSecond();
+        t.reserve("TRAIN_A", enums.Direction.FORWARD, now, now + 10);
 
         model.TrackTraversal sameTraversal =
             new model.TrackTraversal(t, enums.Direction.FORWARD);
@@ -274,9 +301,14 @@ public class InterlockingTest {
         model.TrackTraversal tv =
             new model.TrackTraversal(curr, enums.Direction.FORWARD);
         signal.SignalRule rule = new signal.SignalRule();
+        core.MovementContext ctx = new core.MovementContext(
+            "TRAIN_A", curr.getId(), new java.util.HashMap<>());
+        ctx.setOverlapClear(true);
+        ctx.setRequiredClearanceMetres(0.0);
+        ctx.setAvailableClearanceMetres(1000.0);
+        ctx.setSafeToProceed(true);
 
-        boolean pass = rule.canSetGreen(curr, next, tv, null,
-            "TRAIN_A", new java.util.HashMap<>());
+        boolean pass = rule.canSetGreen(curr, next, tv, null, ctx);
         printResult("testSignalRuleAllConditionsPass", pass);
     }
 
@@ -285,13 +317,19 @@ public class InterlockingTest {
         model.SignalNode s1 = new model.SignalNode("S1", "S1");
         model.SignalNode s2 = new model.SignalNode("S2", "S2");
         model.Track curr = new model.Track("T1", "T1", s1, s2, 100, 10, 30);
-        curr.reserve("OTHER_TRAIN", enums.Direction.REVERSE);
+        long now = java.time.Instant.now().getEpochSecond();
+        curr.reserve("OTHER_TRAIN", enums.Direction.REVERSE, now, now + 10);
         model.TrackTraversal tv =
             new model.TrackTraversal(curr, enums.Direction.FORWARD);
         signal.SignalRule rule = new signal.SignalRule();
+        core.MovementContext ctx = new core.MovementContext(
+            "TRAIN_A", curr.getId(), new java.util.HashMap<>());
+        ctx.setOverlapClear(true);
+        ctx.setRequiredClearanceMetres(0.0);
+        ctx.setAvailableClearanceMetres(1000.0);
+        ctx.setSafeToProceed(true);
 
-        boolean pass = !rule.canSetGreen(curr, null, tv, null,
-            "TRAIN_A", new java.util.HashMap<>());
+        boolean pass = !rule.canSetGreen(curr, null, tv, null, ctx);
         printResult("testSignalRuleFailsIfTrackInUse", pass);
     }
 
@@ -463,6 +501,420 @@ public class InterlockingTest {
             && pathDiverging.get(1).getTrack().getId().equals("OUT_D");
 
         printResult("testJunctionFacingMovementRoutesByState", pass);
+    }
+
+    // -- TEST 26 ------------------------------
+    static void testJunctionSetStateRejectedWhenIsolated() {
+        model.JunctionNode jct = new model.JunctionNode(
+            "J_LOCK", "JunctionLock", "F", "D");
+        jct.isolate("TRAIN_X");
+
+        boolean rejected = false;
+        try {
+            jct.setState(true);
+        } catch (IllegalStateException ex) {
+            rejected = true;
+        }
+
+        printResult("testJunctionSetStateRejectedWhenIsolated", rejected);
+    }
+
+    // -- TEST 27 ------------------------------
+    static void testJunctionReleaseAfterClearanceUsesFoulingDistance() {
+        model.JunctionNode jct = new model.JunctionNode(
+            "J_FOUL", "JunctionFouling", "F", "D");
+        jct.setFoulingDistanceMetres(120.0);
+        jct.lockForRoute("TRAIN_F");
+
+        jct.releaseAfterClearance("TRAIN_F", 50.0);
+        boolean stillLocked = jct.isIsolated();
+
+        jct.releaseAfterClearance("TRAIN_F", 130.0);
+        boolean released = !jct.isIsolated();
+
+        printResult("testJunctionReleaseAfterClearanceUsesFoulingDistance",
+            stillLocked && released);
+    }
+
+    // -- TEST 28 ------------------------------
+    static void testConflictDetectorOverlapEnvelopeBlocksUnsafeRoute() {
+        model.SignalNode s1 = new model.SignalNode("S_OV1", "S_OV1");
+        model.SignalNode s2 = new model.SignalNode("S_OV2", "S_OV2");
+        model.SignalNode s3 = new model.SignalNode("S_OV3", "S_OV3");
+
+        model.Track current = new model.Track("T_OV1", "T_OV1",
+            s1, s2, 100, 10, 30);
+        model.Track next = new model.Track("T_OV2", "T_OV2",
+            s2, s3, 60, 10, 30);
+        current.setOverlapMetres(180.0);
+
+        model.TrackTraversal traversal =
+            new model.TrackTraversal(current, enums.Direction.FORWARD);
+        model.Train train = new model.Train("TR_OV", "OverlapTrain",
+            enums.TrainType.PASSENGER, model.TrainPriority.EXPRESS,
+            null, s1.getId(), s3.getId(), 0,
+            java.time.LocalDateTime.now(),
+            java.time.LocalDateTime.now().plusHours(1));
+
+        core.ConflictDetector cd = new core.ConflictDetector();
+        core.MovementContext ctx = cd.assess(current, next,
+            traversal, null, train);
+
+        boolean pass = !ctx.isSafeToProceed()
+            && "OVERLAP_NOT_CLEAR".equals(ctx.getDenialReason())
+            && ctx.getRequiredClearanceMetres() > ctx.getAvailableClearanceMetres();
+        printResult("testConflictDetectorOverlapEnvelopeBlocksUnsafeRoute",
+            pass);
+    }
+
+    // -- TEST 29 ------------------------------
+    static void testSignalRedCascadesToRepeater() {
+        model.SignalNode parent = new model.SignalNode(
+            "S_PARENT", "Parent", enums.SignalType.HOME);
+        model.SignalNode repeater = new model.SignalNode(
+            "S_REP", "Repeater", enums.SignalType.REPEATING);
+        repeater.setRepeatsSignalId(parent.getId());
+
+        model.SignalNode unrelated = new model.SignalNode(
+            "S_OTHER", "Other", enums.SignalType.REPEATING);
+        unrelated.setRepeatsSignalId("DIFFERENT_PARENT");
+
+        parent.setState(model.SignalState.GREEN);
+        repeater.setState(model.SignalState.GREEN);
+        unrelated.setState(model.SignalState.GREEN);
+
+        model.Track pToRep = new model.Track("T_PR", "T_PR",
+            parent, repeater, 100, 10, 30);
+        model.Track pToOther = new model.Track("T_PO", "T_PO",
+            parent, unrelated, 100, 10, 30);
+
+        core.GraphBuilder g = new core.GraphBuilder();
+        g.addTrack(pToRep);
+        g.addTrack(pToOther);
+
+        signal.SignalController controller = new signal.SignalController();
+        controller.setRed(parent, g);
+
+        boolean pass = parent.getState() == model.SignalState.RED
+            && repeater.getState() == model.SignalState.RED
+            && unrelated.getState() == model.SignalState.GREEN;
+        printResult("testSignalRedCascadesToRepeater", pass);
+    }
+
+    // -- TEST 30 ------------------------------
+    static void testReservationRejectsInvalidTimeWindow() {
+        boolean rejected = false;
+        try {
+            model.Reservation ignored = new model.Reservation(
+                "TR_INV", enums.Direction.FORWARD,
+                200L, 100L);
+            ignored.trainId();
+        } catch (IllegalArgumentException ex) {
+            rejected = true;
+        }
+        printResult("testReservationRejectsInvalidTimeWindow", rejected);
+    }
+
+    // -- TEST 31 ------------------------------
+    static void testReservationWrongTrainCannotRelease() {
+        model.SignalNode a = new model.SignalNode("R1A", "R1A");
+        model.SignalNode b = new model.SignalNode("R1B", "R1B");
+        model.Track t = new model.Track("R1T", "R1T", a, b, 100, 10, 30);
+        long now = java.time.Instant.now().getEpochSecond();
+        t.reserve("TRAIN_OWNER", enums.Direction.FORWARD, now, now + 10);
+
+        t.release("OTHER_TRAIN");
+        boolean stillReserved = t.isInUse()
+            && t.getActiveReservation() != null
+            && "TRAIN_OWNER".equals(t.getActiveReservation().trainId());
+        printResult("testReservationWrongTrainCannotRelease", stillReserved);
+    }
+
+    // -- TEST 32 ------------------------------
+    static void testTimeWindowTouchingBoundaryNoConflict() {
+        java.time.LocalDateTime base =
+            java.time.LocalDateTime.of(2026, 6, 25, 9, 0, 0);
+        model.TrackInterval a = new model.TrackInterval(
+            "TA", "TBND", base, base.plusMinutes(10),
+            enums.Direction.FORWARD);
+        model.TrackInterval b = new model.TrackInterval(
+            "TB", "TBND", base.plusMinutes(10), base.plusMinutes(20),
+            enums.Direction.FORWARD);
+
+        conflict.TimeWindowConflict twc = new conflict.TimeWindowConflict();
+        printResult("testTimeWindowTouchingBoundaryNoConflict",
+            !twc.hasConflict(a, b));
+    }
+
+    // -- TEST 33 ------------------------------
+    static void testOverlapEnvelopeAtExactBoundaryPasses() {
+        model.SignalNode s1 = new model.SignalNode("OE1", "OE1");
+        model.SignalNode s2 = new model.SignalNode("OE2", "OE2");
+        model.SignalNode s3 = new model.SignalNode("OE3", "OE3");
+        model.Track current = new model.Track("OEC", "OEC", s1, s2, 100, 10, 30);
+        model.Track next = new model.Track("OEN", "OEN", s2, s3, 180, 10, 30);
+        current.setOverlapMetres(180.0);
+
+        model.Train train = new model.Train("TR_OE", "TR_OE",
+            enums.TrainType.PASSENGER, model.TrainPriority.EXPRESS,
+            null, s1.getId(), s3.getId(), 0,
+            java.time.LocalDateTime.now(),
+            java.time.LocalDateTime.now().plusHours(1));
+        model.TrackTraversal tv = new model.TrackTraversal(
+            current, enums.Direction.FORWARD);
+
+        core.ConflictDetector cd = new core.ConflictDetector();
+        core.MovementContext ctx = cd.assess(current, next, tv, null, train);
+        boolean pass = ctx.isSafeToProceed()
+            && ctx.getRequiredClearanceMetres() == 180.0
+            && ctx.getAvailableClearanceMetres() == 180.0;
+        printResult("testOverlapEnvelopeAtExactBoundaryPasses", pass);
+    }
+
+    // -- TEST 34 ------------------------------
+    static void testSignalRequestGreenFailureCascadesRedToRepeater() {
+        model.SignalNode parent = new model.SignalNode(
+            "SG_PARENT", "SG_PARENT", enums.SignalType.HOME);
+        model.SignalNode repeater = new model.SignalNode(
+            "SG_REP", "SG_REP", enums.SignalType.REPEATING);
+        repeater.setRepeatsSignalId(parent.getId());
+        model.SignalNode n3 = new model.SignalNode("SG_N3", "SG_N3");
+
+        model.Track current = new model.Track("SG_CUR", "SG_CUR",
+            parent, n3, 100, 10, 30);
+        model.Track extra = new model.Track("SG_REP_LINK", "SG_REP_LINK",
+            parent, repeater, 100, 10, 30);
+        model.Track next = new model.Track("SG_NEXT", "SG_NEXT",
+            n3, new model.SignalNode("SG_N4", "SG_N4"), 200, 10, 30);
+
+        core.GraphBuilder g = new core.GraphBuilder();
+        g.addTrack(current);
+        g.addTrack(extra);
+        g.addTrack(next);
+
+        parent.setState(model.SignalState.GREEN);
+        repeater.setState(model.SignalState.GREEN);
+
+        model.TrackTraversal tv = new model.TrackTraversal(current,
+            enums.Direction.FORWARD);
+        core.MovementContext ctx = new core.MovementContext(
+            "TR_SG", current.getId(), new java.util.HashMap<>());
+        // Force rule failure by marking overlap not clear.
+        ctx.setOverlapClear(false);
+        ctx.setRequiredClearanceMetres(200.0);
+        ctx.setAvailableClearanceMetres(0.0);
+
+        signal.SignalController sc = new signal.SignalController();
+        boolean cleared = sc.requestGreen(parent, current, next, tv,
+            null, ctx, g);
+
+        boolean pass = !cleared
+            && parent.getState() == model.SignalState.RED
+            && repeater.getState() == model.SignalState.RED;
+        printResult("testSignalRequestGreenFailureCascadesRedToRepeater",
+            pass);
+    }
+
+    // -- TEST 35 ------------------------------
+    static void testMeetAndPassDelaysSameDirectionOverlap() {
+        java.time.LocalDateTime dep = java.time.LocalDateTime.of(
+            2026, 6, 25, 10, 0, 0);
+        model.Train a = new model.Train("MPA", "MPA",
+            enums.TrainType.PASSENGER, model.TrainPriority.EXPRESS,
+            null, "N1", "N2", 0, dep, dep.plusMinutes(20));
+        model.Train b = new model.Train("MPB", "MPB",
+            enums.TrainType.PASSENGER, model.TrainPriority.LOCAL,
+            null, "N1", "N2", 0, dep.plusMinutes(1), dep.plusMinutes(25));
+
+        java.util.Map<String, java.util.List<model.TrackInterval>> intervals =
+            new java.util.HashMap<>();
+        intervals.put("MPA", java.util.Arrays.asList(new model.TrackInterval(
+            "MPA", "TRACK_MP", dep, dep.plusMinutes(10),
+            enums.Direction.FORWARD)));
+        intervals.put("MPB", java.util.Arrays.asList(new model.TrackInterval(
+            "MPB", "TRACK_MP", dep.plusMinutes(2), dep.plusMinutes(12),
+            enums.Direction.FORWARD)));
+
+        scheduler.MeetAndPassResolver resolver =
+            new scheduler.MeetAndPassResolver();
+        resolver.resolve(java.util.Arrays.asList(a, b), intervals);
+
+        boolean delayed = b.getDepartureTime().isAfter(dep.plusMinutes(1));
+        printResult("testMeetAndPassDelaysSameDirectionOverlap", delayed);
+    }
+
+    // -- TEST 36 ------------------------------
+    static void testDependencyResolverOrdersBlockedTrainAfterHolder() {
+        model.SignalNode s1 = new model.SignalNode("DR1", "DR1");
+        model.SignalNode s2 = new model.SignalNode("DR2", "DR2");
+        model.Track t = new model.Track("DRT", "DRT", s1, s2, 100, 10, 30);
+        long now = java.time.Instant.now().getEpochSecond();
+        t.reserve("HOLDER", enums.Direction.FORWARD, now, now + 100);
+
+        core.GraphBuilder g = new core.GraphBuilder();
+        g.addTrack(t);
+
+        model.Train holder = new model.Train("HOLDER", "HOLDER",
+            enums.TrainType.PASSENGER, model.TrainPriority.EXPRESS,
+            t.getId(), s1.getId(), s2.getId(), 0,
+            java.time.LocalDateTime.now(),
+            java.time.LocalDateTime.now().plusHours(1));
+        model.Train blocked = new model.Train("BLOCKED", "BLOCKED",
+            enums.TrainType.PASSENGER, model.TrainPriority.LOCAL,
+            null, s1.getId(), s2.getId(), 0,
+            java.time.LocalDateTime.now(),
+            java.time.LocalDateTime.now().plusHours(1));
+
+        java.util.Map<String, java.util.List<model.TrackTraversal>> paths =
+            new java.util.HashMap<>();
+        paths.put("HOLDER", java.util.Arrays.asList(
+            new model.TrackTraversal(t, enums.Direction.FORWARD)));
+        paths.put("BLOCKED", java.util.Arrays.asList(
+            new model.TrackTraversal(t, enums.Direction.FORWARD)));
+
+        scheduler.DependencyResolver dr = new scheduler.DependencyResolver(g);
+        java.util.List<model.Train> ordered = dr.resolve(
+            java.util.Arrays.asList(holder, blocked), paths);
+
+        boolean pass = !ordered.isEmpty()
+            && "HOLDER".equals(ordered.get(0).getId());
+        printResult("testDependencyResolverOrdersBlockedTrainAfterHolder",
+            pass);
+    }
+
+    // -- TEST 37 ------------------------------
+    static void testAssessHeadOnSetsDenialReasonAndBlocker() {
+        model.SignalNode a = new model.SignalNode("AH1", "AH1");
+        model.SignalNode b = new model.SignalNode("AH2", "AH2");
+        model.Track track = new model.Track("AHT", "AHT", a, b, 100, 10, 30);
+        long now = java.time.Instant.now().getEpochSecond();
+        track.reserve("TRAIN_OCC", enums.Direction.FORWARD, now, now + 10);
+
+        model.Train candidate = new model.Train("TRAIN_NEW", "TRAIN_NEW",
+            enums.TrainType.PASSENGER, model.TrainPriority.LOCAL,
+            null, a.getId(), b.getId(), 0,
+            java.time.LocalDateTime.now(),
+            java.time.LocalDateTime.now().plusHours(1));
+        model.TrackTraversal tv = new model.TrackTraversal(track,
+            enums.Direction.REVERSE);
+
+        core.ConflictDetector cd = new core.ConflictDetector();
+        core.MovementContext ctx = cd.assess(track, null, tv, null, candidate);
+        boolean pass = !ctx.isSafeToProceed()
+            && "HEAD_ON_CONFLICT".equals(ctx.getDenialReason())
+            && "TRAIN_OCC".equals(ctx.getBlockerTrainId());
+        printResult("testAssessHeadOnSetsDenialReasonAndBlocker", pass);
+    }
+
+    // -- TEST 38 ------------------------------
+    static void testAssessFollowingSetsDenialReasonAndBlocker() {
+        model.SignalNode a = new model.SignalNode("AF1", "AF1");
+        model.SignalNode b = new model.SignalNode("AF2", "AF2");
+        model.Track track = new model.Track("AFT", "AFT", a, b, 100, 10, 30);
+        long now = java.time.Instant.now().getEpochSecond();
+        track.reserve("TRAIN_OCC2", enums.Direction.FORWARD, now, now + 10);
+
+        model.Train candidate = new model.Train("TRAIN_NEW2", "TRAIN_NEW2",
+            enums.TrainType.PASSENGER, model.TrainPriority.LOCAL,
+            null, a.getId(), b.getId(), 0,
+            java.time.LocalDateTime.now(),
+            java.time.LocalDateTime.now().plusHours(1));
+        model.TrackTraversal tv = new model.TrackTraversal(track,
+            enums.Direction.FORWARD);
+
+        core.ConflictDetector cd = new core.ConflictDetector();
+        core.MovementContext ctx = cd.assess(track, null, tv, null, candidate);
+        boolean pass = !ctx.isSafeToProceed()
+            && "FOLLOWING_CONFLICT".equals(ctx.getDenialReason())
+            && "TRAIN_OCC2".equals(ctx.getBlockerTrainId());
+        printResult("testAssessFollowingSetsDenialReasonAndBlocker", pass);
+    }
+
+    // -- TEST 39 ------------------------------
+    static void testAssessRejectsWhenJunctionStillLockedAfterShortClearance() {
+        model.SignalNode in = new model.SignalNode("JL_IN", "JL_IN");
+        model.SignalNode out = new model.SignalNode("JL_OUT", "JL_OUT");
+        model.JunctionNode jct = new model.JunctionNode(
+            "JL_J", "JL_J", in.getId(), out.getId());
+        jct.setFoulingDistanceMetres(500.0);
+
+        model.Track t = new model.Track("JL_T", "JL_T", in, jct, 100, 10, 30);
+        model.Track next = new model.Track("JL_N", "JL_N", jct, out, 100, 10, 30);
+        model.TrackTraversal tv = new model.TrackTraversal(t,
+            enums.Direction.FORWARD);
+        model.Train tr = new model.Train("JL_TR", "JL_TR",
+            enums.TrainType.PASSENGER, model.TrainPriority.EXPRESS,
+            null, in.getId(), out.getId(), 0,
+            java.time.LocalDateTime.now(),
+            java.time.LocalDateTime.now().plusHours(1));
+
+        core.ConflictDetector cd = new core.ConflictDetector();
+        cd.onTrackEntry(tr, t, tv, jct);
+        cd.onTrackExit(tr, t, jct); // clears only 100m; fouling needs 500m
+
+        core.MovementContext ctx2 = cd.assess(t, next, tv, jct, tr);
+        boolean pass = !ctx2.isSafeToProceed()
+            && "JUNCTION_ISOLATED".equals(ctx2.getDenialReason());
+        printResult("testAssessRejectsWhenJunctionStillLockedAfterShortClearance",
+            pass);
+    }
+
+    // -- TEST 40 ------------------------------
+    static void testAccidentLikeWrongRouteIntoShortOccupiedEnvelopeBlocked() {
+        model.SignalNode home = new model.SignalNode("AC_HOME", "AC_HOME");
+        model.SignalNode jnode = new model.SignalNode("AC_J", "AC_J");
+        model.SignalNode loop = new model.SignalNode("AC_LOOP", "AC_LOOP");
+
+        model.Track approach = new model.Track("AC_APP", "AC_APP",
+            home, jnode, 120, 10, 30);
+        model.Track loopEntry = new model.Track("AC_LOOP_E", "AC_LOOP_E",
+            jnode, loop, 80, 10, 30);
+        approach.setOverlapMetres(180.0);
+
+        long now = java.time.Instant.now().getEpochSecond();
+        loopEntry.reserve("STABLED_RAKE", enums.Direction.FORWARD,
+            now, now + 600);
+
+        model.Train incoming = new model.Train("AC_TR", "AC_TR",
+            enums.TrainType.PASSENGER, model.TrainPriority.EXPRESS,
+            null, home.getId(), loop.getId(), 0,
+            java.time.LocalDateTime.now(),
+            java.time.LocalDateTime.now().plusHours(1));
+        model.TrackTraversal tv = new model.TrackTraversal(approach,
+            enums.Direction.FORWARD);
+
+        core.ConflictDetector cd = new core.ConflictDetector();
+        core.MovementContext ctx = cd.assess(approach, loopEntry,
+            tv, null, incoming);
+        boolean pass = !ctx.isSafeToProceed()
+            && "OVERLAP_NOT_CLEAR".equals(ctx.getDenialReason());
+        printResult("testAccidentLikeWrongRouteIntoShortOccupiedEnvelopeBlocked",
+            pass);
+    }
+
+    // -- TEST 41 ------------------------------
+    static void testAccidentLikeSingleLineOppositeMovementsSecondTrainHeld() {
+        model.SignalNode a = new model.SignalNode("SL_A", "SL_A");
+        model.SignalNode b = new model.SignalNode("SL_B", "SL_B");
+        model.Track single = new model.Track("SL_T", "SL_T", a, b, 300, 10, 30);
+        long now = java.time.Instant.now().getEpochSecond();
+        single.reserve("TRAIN_UP", enums.Direction.FORWARD, now, now + 100);
+
+        model.Train downTrain = new model.Train("TRAIN_DOWN", "TRAIN_DOWN",
+            enums.TrainType.PASSENGER, model.TrainPriority.EXPRESS,
+            null, b.getId(), a.getId(), 0,
+            java.time.LocalDateTime.now(),
+            java.time.LocalDateTime.now().plusHours(1));
+        model.TrackTraversal reverse = new model.TrackTraversal(single,
+            enums.Direction.REVERSE);
+
+        core.ConflictDetector cd = new core.ConflictDetector();
+        core.MovementContext ctx = cd.assess(single, null,
+            reverse, null, downTrain);
+        boolean pass = !ctx.isSafeToProceed()
+            && "HEAD_ON_CONFLICT".equals(ctx.getDenialReason());
+        printResult("testAccidentLikeSingleLineOppositeMovementsSecondTrainHeld",
+            pass);
     }
 
     // -- TEST 21 ------------------------------

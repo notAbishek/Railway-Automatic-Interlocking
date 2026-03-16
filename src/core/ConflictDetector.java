@@ -5,18 +5,15 @@ import conflict.FollowingConflict;
 import conflict.HeadOnConflict;
 import java.util.*;
 import model.*;
-import signal.SignalRule;
 
 public class ConflictDetector {
 
     private final HeadOnConflict      headOn    = new HeadOnConflict();
     private final FollowingConflict   following = new FollowingConflict();
     private final DeadlockDetector    deadlock  = new DeadlockDetector();
-    private final SignalRule          rule      = new SignalRule();
     private final Map<String, String> blockedBy = new HashMap<>();
 
-    // Primary check. Returns true = safe to enter. false = hold train.
-    public boolean check(
+    public MovementContext assess(
             Track          track,
             Track          nextTrack,
             TrackTraversal traversal,
@@ -34,44 +31,66 @@ public class ConflictDetector {
         }
 
         String trainId = train.getId();
+        MovementContext context = new MovementContext(trainId,
+            track.getId(), blockedBy);
 
         // 1. Track free?
         if (track.isInUse()) {
+            Reservation active = track.getActiveReservation();
+            String blockerId = active != null
+                ? active.trainId() : "UNKNOWN";
+            context.setBlockerTrainId(blockerId);
             if (headOn.isHeadOn(track, traversal)) {
                 log("HEAD-ON CONFLICT", trainId, track.getId());
-                blockedBy.put(trainId, track.getUsedBy().get(0));
-                return false;
+                blockedBy.put(trainId, blockerId);
+                context.setDenialReason("HEAD_ON_CONFLICT");
+                context.setSafeToProceed(false);
+                return context;
             }
             if (following.isFollowing(track, traversal)) {
                 log("FOLLOWING CONFLICT", trainId, track.getId());
-                blockedBy.put(trainId, track.getUsedBy().get(0));
-                return false;
+                blockedBy.put(trainId, blockerId);
+                context.setDenialReason("FOLLOWING_CONFLICT");
+                context.setSafeToProceed(false);
+                return context;
             }
         }
 
         // 2. Junction not isolated?
         if (junction != null && junction.isIsolated()) {
             log("JUNCTION ISOLATED", trainId, junction.getId());
-            return false;
+            context.setJunctionLocked(true);
+            context.setDenialReason("JUNCTION_ISOLATED");
+            context.setSafeToProceed(false);
+            return context;
         }
 
         // 2b. Topological junction movement validation (derailment blocks)
         if (junction != null && nextTrack != null
                 && !isJunctionMovementAllowed(track, nextTrack, junction)) {
             log("DERAILMENT BLOCK", trainId, junction.getId());
-            return false;
+            context.setDenialReason("DERAILMENT_BLOCK");
+            context.setSafeToProceed(false);
+            return context;
         }
 
         // 3. Deadlock check
         if (deadlock.hasCycle(trainId, blockedBy)) {
             log("DEADLOCK DETECTED", trainId, track.getId());
-            return false;
+            context.setDenialReason("DEADLOCK");
+            context.setSafeToProceed(false);
+            return context;
         }
 
-        // 4. Overlap clear?
-        if (!rule.isOverlapClear(track, nextTrack)) {
+        // 4. Geometric overlap/fouling envelope check
+        boolean overlapClear = computeOverlapEnvelope(track,
+            nextTrack, junction, context);
+        context.setOverlapClear(overlapClear);
+        if (!overlapClear) {
             log("OVERLAP NOT CLEAR", trainId, track.getId());
-            return false;
+            context.setDenialReason("OVERLAP_NOT_CLEAR");
+            context.setSafeToProceed(false);
+            return context;
         }
 
         // 5. TSR check — warn if speed limit changed
@@ -83,7 +102,19 @@ public class ConflictDetector {
 
         // All clear
         blockedBy.remove(trainId);
-        return true;
+        context.setSafeToProceed(true);
+        return context;
+    }
+
+    // Primary check. Returns true = safe to enter. false = hold train.
+    public boolean check(
+            Track          track,
+            Track          nextTrack,
+            TrackTraversal traversal,
+            JunctionNode   junction,
+            Train          train) {
+        return assess(track, nextTrack, traversal, junction,
+            train).isSafeToProceed();
     }
 
     // Called when a train exits a track — release junction isolation
@@ -94,7 +125,8 @@ public class ConflictDetector {
                 + train.getId(), train.getId(), track.getId());
         }
         if (junction != null) {
-            junction.release(train.getId());
+            junction.releaseAfterClearance(train.getId(),
+                track.getDistance());
         }
         track.release(train.getId());
         train.clearTrackOnUse();
@@ -106,13 +138,48 @@ public class ConflictDetector {
                               JunctionNode junction) {
         // Lock the junction in its current mechanical state.
         if (junction != null) {
-            junction.isolate(train.getId());
+            junction.lockForRoute(train.getId());
         }
 
-        // Reserve the track (already exists — keep it)
-        track.reserve(train.getId(), traversal.getDirection());
+        long enterTime = System.currentTimeMillis() / 1000L;
+        long occupancySeconds;
+        if (track.getMinSpeedLimit() > 0 && track.getDistance() > 0) {
+            occupancySeconds = (long) Math.ceil(
+                track.getDistance() / track.getMinSpeedLimit());
+        } else {
+            occupancySeconds = 1L;
+        }
+        long expectedExitTime = enterTime + occupancySeconds;
+
+        // Reserve the track with a single active temporal reservation.
+        track.reserve(train.getId(), traversal.getDirection(),
+            enterTime, expectedExitTime);
         train.setTrackOnUse(track.getId());
         train.resetLastVehicle();
+    }
+
+    private boolean computeOverlapEnvelope(Track currentTrack,
+                                            Track nextTrack,
+                                            JunctionNode junction,
+                                            MovementContext context) {
+        if (nextTrack == null) {
+            context.setRequiredClearanceMetres(0.0);
+            context.setAvailableClearanceMetres(0.0);
+            return true;
+        }
+
+        double overlap = Math.max(0.0, currentTrack.getOverlapMetres());
+        double fouling = 0.0;
+        if (junction != null) {
+            fouling = Math.max(0.0, junction.getFoulingDistanceMetres());
+        }
+        double required = Math.max(overlap, fouling);
+        double available = nextTrack.isInUse() ? 0.0 : nextTrack.getDistance();
+
+        context.setRequiredClearanceMetres(required);
+        context.setAvailableClearanceMetres(available);
+
+        return available >= required;
     }
 
     private boolean isJunctionMovementAllowed(Track incomingTrack,

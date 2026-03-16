@@ -57,7 +57,23 @@ public class JunctionNode extends Node {
     }
 
     public void setState(boolean state) {
+        if (this.isolated) {
+            throw new IllegalStateException(
+                "Cannot change junction state while isolated by train "
+                + this.isolatedByTrainId);
+        }
         this.state = state;
+    }
+
+    public void lockForRoute(String trainId) {
+        isolate(trainId);
+    }
+
+    public void releaseAfterClearance(String trainId,
+                                       double clearedDistanceMetres) {
+        if (clearedDistanceMetres >= this.foulingDistanceMetres) {
+            release(trainId);
+        }
     }
 
     public void isolate(String trainId) {
@@ -69,6 +85,9 @@ public class JunctionNode extends Node {
     }
 
     public void release(String trainId) {
+        if (trainId == null) {
+            return;
+        }
         if (trainId.equals(this.isolatedByTrainId)) {
             this.isolated          = false;
             this.isolatedByTrainId = null;
