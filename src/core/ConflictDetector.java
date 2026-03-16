@@ -55,6 +55,13 @@ public class ConflictDetector {
             return false;
         }
 
+        // 2b. Topological junction movement validation (derailment blocks)
+        if (junction != null && nextTrack != null
+                && !isJunctionMovementAllowed(track, nextTrack, junction)) {
+            log("DERAILMENT BLOCK", trainId, junction.getId());
+            return false;
+        }
+
         // 3. Deadlock check
         if (deadlock.hasCycle(trainId, blockedBy)) {
             log("DEADLOCK DETECTED", trainId, track.getId());
@@ -97,35 +104,7 @@ public class ConflictDetector {
     public void onTrackEntry(Train train, Track track,
                               TrackTraversal traversal,
                               JunctionNode junction) {
-        // Set junction state based on which route this train is taking
-        if (junction != null && junction.getDirection()
-                == enums.JunctionDirection.LEFT) {
-            // This is a SPLIT junction — determine which exit this train uses
-            // We need to know the next track's node to decide primary vs secondary
-            // For V1: derive from the track being entered after this junction
-            // The track being reserved IS the outgoing track from the junction
-            // Check if this track leads to the primary or secondary node
-
-            String trackEndId = track.getEndNode().getId();
-            if (trackEndId.equals(junction.getSecondaryNodeId())) {
-                junction.setState(true);   // secondary route
-            } else {
-                junction.setState(false);  // primary route (default)
-            }
-        }
-
-        if (junction != null && junction.getDirection()
-                == enums.JunctionDirection.RIGHT) {
-            // This is a MERGE junction — record which incoming side
-            String trackStartId = track.getStartNode().getId();
-            if (trackStartId.equals(junction.getSecondaryNodeId())) {
-                junction.setState(true);
-            } else {
-                junction.setState(false);
-            }
-        }
-
-        // Lock the junction AFTER state is set
+        // Lock the junction in its current mechanical state.
         if (junction != null) {
             junction.isolate(train.getId());
         }
@@ -134,6 +113,54 @@ public class ConflictDetector {
         track.reserve(train.getId(), traversal.getDirection());
         train.setTrackOnUse(track.getId());
         train.resetLastVehicle();
+    }
+
+    private boolean isJunctionMovementAllowed(Track incomingTrack,
+                                              Track outgoingTrack,
+                                              JunctionNode junction) {
+        String junctionId = junction.getId();
+        String incomingNode = otherEndId(incomingTrack, junctionId);
+        String outgoingNode = otherEndId(outgoingTrack, junctionId);
+
+        if (incomingNode == null || outgoingNode == null) {
+            return true;
+        }
+
+        String facing = junction.getFacingPointer();
+        String diverging = junction.getDivergingPointer();
+        boolean state = junction.getState();
+
+        if (incomingNode.equals(facing)) {
+            if (state) {
+                return outgoingNode.equals(diverging);
+            }
+            return !outgoingNode.equals(facing)
+                && !outgoingNode.equals(diverging);
+        }
+
+        if (incomingNode.equals(diverging)) {
+            if (!state) {
+                return false;
+            }
+            return outgoingNode.equals(facing);
+        }
+
+        if (state) {
+            return false;
+        }
+        return outgoingNode.equals(facing);
+    }
+
+    private String otherEndId(Track track, String nodeId) {
+        String start = track.getStartNode().getId();
+        String end = track.getEndNode().getId();
+        if (start.equals(nodeId)) {
+            return end;
+        }
+        if (end.equals(nodeId)) {
+            return start;
+        }
+        return null;
     }
 
     private void log(String event, String trainId, String location) {

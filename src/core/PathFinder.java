@@ -9,6 +9,7 @@ public class PathFinder {
 
     private final Train        train;
     private final GraphBuilder graph;
+    private final Map<String, Node> nodesById = new HashMap<>();
 
     public PathFinder(Train train, GraphBuilder graph) {
         if (train == null) {
@@ -19,6 +20,7 @@ public class PathFinder {
         }
         this.train = train;
         this.graph = graph;
+        indexNodes();
     }
 
     // Entry point — picks algorithm based on train priority
@@ -39,63 +41,62 @@ public class PathFinder {
         String startId = train.getStartNode();
         String endId   = train.getEndNode();
 
-        // dist — shortest travel time to each node
-        Map<String, Double>         dist      = new HashMap<>();
-        // prev — which track+direction brought us to this node
-        Map<String, TrackTraversal> prevTrack = new HashMap<>();
-        // visited
-        Set<String>                 visited   = new HashSet<>();
-
-        // PriorityQueue — [nodeId, costSoFar]
-        PriorityQueue<double[]> pq = new PriorityQueue<>(
-            Comparator.comparingDouble(a -> a[1])
+        Map<String, Double> dist = new HashMap<>();
+        Map<String, PrevStep> prevStep = new HashMap<>();
+        PriorityQueue<SearchEntry> pq = new PriorityQueue<>(
+            Comparator.comparingDouble(SearchEntry::cost)
         );
 
-        // Use nodeId as string key, map to index via nodeIndexMap
-        Map<String, Integer> nodeIndex = new HashMap<>();
-        List<String> nodeIds = new ArrayList<>(
-            graph.getAdjacencyList().keySet()
-        );
-        for (int i = 0; i < nodeIds.size(); i++) {
-            nodeIndex.put(nodeIds.get(i), i);
-            dist.put(nodeIds.get(i), Double.MAX_VALUE);
-        }
+        String startState = stateKey(null, startId);
+        dist.put(startState, 0.0);
+        pq.offer(new SearchEntry(startState, null, startId, 0.0));
 
-        dist.put(startId, 0.0);
-        pq.offer(new double[]{ nodeIndex.get(startId), 0.0 });
+        String bestEndState = null;
 
         while (!pq.isEmpty()) {
-            double[] curr      = pq.poll();
-            String   currId    = nodeIds.get((int) curr[0]);
-            double   currCost  = curr[1];
+            SearchEntry curr = pq.poll();
+            if (curr.cost() > dist.getOrDefault(curr.stateKey(),
+                    Double.MAX_VALUE)) {
+                continue;
+            }
 
-            if (visited.contains(currId)) continue;
-            visited.add(currId);
+            if (curr.currId().equals(endId)) {
+                bestEndState = curr.stateKey();
+                break;
+            }
 
-            if (currId.equals(endId)) break;
-
-            for (Track track : graph.getTracksFrom(currId)) {
-                String neighborId = getNeighbor(track, currId);
+            for (Track track : graph.getTracksFrom(curr.currId())) {
+                String neighborId = getNeighbor(track, curr.currId());
                 if (neighborId == null)     continue; // not connected
-                if (visited.contains(neighborId)) continue;
+                if (!track.isAllowedFor(train.getType())) continue;
+                if (!isMovementAllowedAtCurrentNode(curr.currId(),
+                        curr.prevId(), neighborId)) {
+                    continue;
+                }
 
                 double weight  = travelTime(track);
-                double newCost = currCost + weight;
+                double newCost = curr.cost() + weight;
 
-                if (newCost < dist.get(neighborId)) {
-                    dist.put(neighborId, newCost);
-                    Direction dir = track.getStartNode().getId().equals(currId)
+                String nextState = stateKey(curr.currId(), neighborId);
+
+                if (newCost < dist.getOrDefault(nextState,
+                        Double.MAX_VALUE)) {
+                    dist.put(nextState, newCost);
+                    Direction dir = track.getStartNode().getId()
+                        .equals(curr.currId())
                         ? Direction.FORWARD
                         : Direction.REVERSE;
-                    prevTrack.put(neighborId, new TrackTraversal(track, dir));
-                    pq.offer(new double[]{
-                        nodeIndex.get(neighborId), newCost
-                    });
+                    prevStep.put(nextState, new PrevStep(
+                        curr.stateKey(), new TrackTraversal(track, dir)
+                    ));
+                    pq.offer(new SearchEntry(nextState, curr.currId(),
+                        neighborId, newCost));
                 }
             }
         }
 
-        return reconstructPath(prevTrack, startId, endId);
+        return reconstructPath(prevStep, startState, bestEndState,
+            startId, endId);
     }
 
     // ─────────────────────────────────────────────
@@ -163,62 +164,69 @@ public class PathFinder {
     // Returns null if this track is not connected to currentNodeId
     private String getNeighbor(Track track, String currentNodeId) {
         if (track.getStartNode().getId().equals(currentNodeId)) {
-            // If the current node is a SPLIT junction (LEFT direction),
-            // check if this outgoing track is the one that is set
-            if (track.getStartNode() instanceof model.JunctionNode) {
-                model.JunctionNode jct =
-                    (model.JunctionNode) track.getStartNode();
-                if (jct.getDirection() ==
-                        enums.JunctionDirection.LEFT) {
-                    if (!isJunctionRouteAllowed(jct, track)) return null;
-                }
-                // RIGHT junction: only one outgoing track exists,
-                // always allowed — no check needed
-            }
-
-            // allowedTypes check (already exists — keep it)
-            if (!track.isAllowedFor(train.getType())) return null;
-
             return track.getEndNode().getId();
         }
 
         // REVERSE direction
         if (track.getEndNode().getId().equals(currentNodeId)) {
-            // If the current node is a MERGE junction (RIGHT direction),
-            // check if this incoming track is the one that is set
-            if (track.getEndNode() instanceof model.JunctionNode) {
-                model.JunctionNode jct =
-                    (model.JunctionNode) track.getEndNode();
-                if (jct.getDirection() ==
-                        enums.JunctionDirection.RIGHT) {
-                    if (!isJunctionRouteAllowed(jct, track)) return null;
-                }
-                // LEFT junction REVERSE: only one incoming track exists
-            }
-
-            if (!track.isAllowedFor(train.getType())) return null;
-
             return track.getStartNode().getId();
         }
 
         return null;
     }
 
-    // Returns true if this track is the allowed route through
-    // the junction based on junction.state
-    private boolean isJunctionRouteAllowed(model.JunctionNode jct,
-                                            model.Track track) {
-        // state false = primary route, state true = secondary route
-        String allowedNodeId = jct.getState()
-            ? jct.getSecondaryNodeId()
-            : jct.getPrimaryNodeId();
+    // Switch routing rules are evaluated when the train is at the junction,
+    // using the previous node (incoming side) and candidate next node.
+    private boolean isMovementAllowedAtCurrentNode(String currentNodeId,
+                                                   String prevNodeId,
+                                                   String nextNodeId) {
+        Node current = nodesById.get(currentNodeId);
+        if (!(current instanceof JunctionNode)) {
+            return true;
+        }
+        if (prevNodeId == null) {
+            return true;
+        }
 
-        if (allowedNodeId == null) return true;
-        // null means junction has no restriction set yet — allow all
+        JunctionNode junction = (JunctionNode) current;
+        String facing = junction.getFacingPointer();
+        String diverging = junction.getDivergingPointer();
+        boolean state = junction.getState();
 
-        // Check if this track connects to the allowed node
-        return track.getStartNode().getId().equals(allowedNodeId)
-            || track.getEndNode().getId().equals(allowedNodeId);
+        if (prevNodeId.equals(facing)) {
+            if (state) {
+                return nextNodeId.equals(diverging);
+            }
+            return !nextNodeId.equals(facing)
+                && !nextNodeId.equals(diverging);
+        }
+
+        if (prevNodeId.equals(diverging)) {
+            if (!state) {
+                return false;
+            }
+            return nextNodeId.equals(facing);
+        }
+
+        if (state) {
+            return false;
+        }
+        return nextNodeId.equals(facing);
+    }
+
+    private void indexNodes() {
+        for (List<Track> tracks : graph.getAdjacencyList().values()) {
+            for (Track track : tracks) {
+                Node start = track.getStartNode();
+                Node end = track.getEndNode();
+                nodesById.putIfAbsent(start.getId(), start);
+                nodesById.putIfAbsent(end.getId(), end);
+            }
+        }
+    }
+
+    private String stateKey(String prevId, String currId) {
+        return (prevId == null ? "NULL" : prevId) + "->" + currId;
     }
 
     // Travel time in seconds = distance / minSpeedLimit
@@ -231,36 +239,71 @@ public class PathFinder {
 
     // Reconstruct path by walking prevTrack map backwards from end to start
     private List<TrackTraversal> reconstructPath(
-            Map<String, TrackTraversal> prevTrack,
+            Map<String, PrevStep> prevStep,
+            String startState,
+            String endState,
             String startId,
             String endId) {
 
+        if (endState == null) {
+            System.out.println("WARNING: No path found for train "
+                + train.getId()
+                + " from " + startId
+                + " to "   + endId);
+            return new ArrayList<>();
+        }
+
         List<TrackTraversal> path = new ArrayList<>();
-        String current   = endId;
+        String currentState = endState;
 
-        // Walk backwards from end to start
-        while (!current.equals(startId)) {
-            TrackTraversal traversal = prevTrack.get(current);
-
-            if (traversal == null) {
-                // No path found
+        while (!currentState.equals(startState)) {
+            PrevStep step = prevStep.get(currentState);
+            if (step == null) {
                 System.out.println("WARNING: No path found for train "
                     + train.getId()
                     + " from " + startId
                     + " to "   + endId);
                 return new ArrayList<>();
             }
-
-            path.add(traversal);
-
-            // Step back — which node did we come from?
-            current = (traversal.getDirection() == Direction.FORWARD)
-                ? traversal.getTrack().getStartNode().getId()
-                : traversal.getTrack().getEndNode().getId();
+            path.add(step.traversal());
+            currentState = step.previousStateKey();
         }
 
-        // Path was built end → start, reverse it
         Collections.reverse(path);
         return path;
+    }
+
+    private static final class SearchEntry {
+        private final String stateKey;
+        private final String prevId;
+        private final String currId;
+        private final double cost;
+
+        private SearchEntry(String stateKey, String prevId,
+                            String currId, double cost) {
+            this.stateKey = stateKey;
+            this.prevId = prevId;
+            this.currId = currId;
+            this.cost = cost;
+        }
+
+        private String stateKey() { return stateKey; }
+        private String prevId() { return prevId; }
+        private String currId() { return currId; }
+        private double cost() { return cost; }
+    }
+
+    private static final class PrevStep {
+        private final String previousStateKey;
+        private final TrackTraversal traversal;
+
+        private PrevStep(String previousStateKey,
+                         TrackTraversal traversal) {
+            this.previousStateKey = previousStateKey;
+            this.traversal = traversal;
+        }
+
+        private String previousStateKey() { return previousStateKey; }
+        private TrackTraversal traversal() { return traversal; }
     }
 }

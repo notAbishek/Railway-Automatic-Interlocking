@@ -1,12 +1,9 @@
 package model;
 
-import enums.JunctionDirection;
-
 public class JunctionNode extends Node {
-    private final String primaryNode;
-    private final String secondaryNode;
+    private String facingPointer;
+    private String divergingPointer;
     private boolean state = false;
-    private final JunctionDirection direction;
     private boolean isolated         = false;
     // true = points are physically locked, cannot change state
     private String  isolatedByTrainId = null;
@@ -17,24 +14,21 @@ public class JunctionNode extends Node {
     public JunctionNode(
             String id,
             String name,
-            String primaryNode,
-            String secondaryNode,
-            boolean state,
-            JunctionDirection direction) {
+            String facingPointer,
+            String divergingPointer,
+            boolean state) {
         super(id, name);
-        this.primaryNode = primaryNode;
-        this.secondaryNode = secondaryNode;
+        this.facingPointer = facingPointer;
+        this.divergingPointer = divergingPointer;
         this.state = state;
-        this.direction = direction;
     }
 
     public JunctionNode(
             String id,
             String name,
-            JunctionDirection direction,
-            String primaryNode,
-            String secondaryNode) {
-        this(id, name, primaryNode, secondaryNode, false, direction);
+            String facingPointer,
+            String divergingPointer) {
+        this(id, name, facingPointer, divergingPointer, false);
     }
 
     @Override
@@ -42,12 +36,20 @@ public class JunctionNode extends Node {
         return "JUNCTION";
     }
 
-    public String getPrimaryNodeId() {
-        return primaryNode;
+    public String getFacingPointer() {
+        return facingPointer;
     }
 
-    public String getSecondaryNodeId() {
-        return secondaryNode;
+    public void setFacingPointer(String facingPointer) {
+        this.facingPointer = facingPointer;
+    }
+
+    public String getDivergingPointer() {
+        return divergingPointer;
+    }
+
+    public void setDivergingPointer(String divergingPointer) {
+        this.divergingPointer = divergingPointer;
     }
 
     public boolean getState() {
@@ -56,10 +58,6 @@ public class JunctionNode extends Node {
 
     public void setState(boolean state) {
         this.state = state;
-    }
-
-    public JunctionDirection getDirection() {
-        return direction;
     }
 
     public void isolate(String trainId) {

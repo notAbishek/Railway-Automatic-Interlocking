@@ -21,7 +21,7 @@ This diagram captures the runtime control flow: path planning and scheduling hap
 
 ![Junction Diagram](assets/junction.svg)
 
-This layer view focuses on junction behavior: a junction stores a direction model and a currently selected route state. Split and merge behavior is evaluated during path expansion and again during movement control, so the model reflects both planned and active route conditions. Junction isolation is used to prevent competing usage during traversal.
+This layer view focuses on junction behavior: a junction stores topological pointers (`facingPointer` and `divergingPointer`) plus a mechanical switch state. Routing and movement checks apply the same incoming-side rules during path expansion and runtime conflict validation, so planning-time and movement-time behavior stay consistent. Junction isolation is used to prevent competing usage during traversal.
 
 ![Track Layout](assets/track-layout.svg)
 
@@ -61,7 +61,7 @@ The implementation uses MACL-style aspects through `SignalState`: RED, YELLOW, D
 
 ## Junction Model
 
-A `JunctionNode` models two-route behavior using primary and secondary connected node ids, a boolean state selector, and a junction direction classification. For split behavior, the selected state constrains which branch may be used. For merge behavior, state records and constrains the selected incoming side according to current movement logic.
+A `JunctionNode` models turnout behavior using a `facingPointer`, a `divergingPointer`, and a boolean mechanical `state`. The straight path is implicit: any connected node that is not either pointer is treated as the straight-side connection. The rules are topology-first and direction-agnostic: arriving from facing side routes to diverging when active and to straight when inactive; arriving from diverging side is blocked when inactive; arriving from straight side is blocked when active.
 
 ---
 
@@ -84,7 +84,7 @@ The scheduler computes paths and occupancy intervals before dispatch so conflict
 
 ## Indian Railways Standards Compliance
 
-The codebase already aligns with several core Indian Railways signaling principles for V1 simulation: fail-safe default RED behavior is implemented at signal construction, one-train-per-conflicting-section logic is represented through occupancy and conflict checks, and overlap-aware gating exists in the signal rule chain. Interlocking preconditions are partially represented because route checks are enforced before signal clearance, and junction state plus isolation are now set and applied before movement lock-in for the traversed path.
+The codebase already aligns with several core Indian Railways signaling principles for V1 simulation: fail-safe default RED behavior is implemented at signal construction, one-train-per-conflicting-section logic is represented through occupancy and conflict checks, and overlap-aware gating exists in the signal rule chain. Interlocking preconditions are partially represented because route checks are enforced before signal clearance, and topology-based junction route validation plus isolation are applied before movement lock-in for the traversed path.
 
 Some standards are only partially represented in V1 because the simulation is algorithmic rather than infrastructure-coupled. Fouling-point enforcement is modeled as data fields and overlap defaults, but geometric fouling validation against real switch geometry and approach distances is not fully computed in current movement authorization. Last-vehicle logic exists and is tracked, but automatic hardware-grade proving and strict hold-until-proved release behavior are not yet complete in the current runtime pipeline.
 
@@ -133,7 +133,6 @@ src/
     schema.sql
   enums/
     Direction.java
-    JunctionDirection.java
     JunctionState.java
     Priority.java
     SignalType.java

@@ -26,8 +26,9 @@ public class InterlockingTest {
         testShuntingResolverSimple();
         testDispatcherTimeOrderFirst();
         testDispatcherPriorityTiebreak();
-        testJunctionStatePrimaryRoute();
-        testJunctionStateSecondaryRoute();
+        testJunctionTrailingFromDivergingDerailsWhenInactive();
+        testJunctionTrailingFromStraightDerailsWhenActive();
+        testJunctionFacingMovementRoutesByState();
 
         System.out.println("\n=== TEST SUITE COMPLETE ===");
     }
@@ -142,8 +143,7 @@ public class InterlockingTest {
     // -- TEST 6 -------------------------------
     static void testJunctionIsolation() {
         model.JunctionNode jct = new model.JunctionNode(
-            "J1", "Junction 1", enums.JunctionDirection.RIGHT,
-            "PRIMARY_NODE", "SECONDARY_NODE");
+            "J1", "Junction 1", "FACING_NODE", "DIVERGING_NODE");
 
         boolean initiallyFree = !jct.isIsolated();
         jct.isolate("TRAIN_A");
@@ -365,82 +365,104 @@ public class InterlockingTest {
     }
 
     // -- TEST 23 ------------------------------
-    static void testJunctionStatePrimaryRoute() {
-        // LEFT junction: state=false → train must go via primaryNodeId
-        // Only the primary route track should be returned by PathFinder
-
-        model.SignalNode s1 = new model.SignalNode("S1","S1");
-        model.SignalNode s2 = new model.SignalNode("S2","S2"); // primary exit
-        model.SignalNode s3 = new model.SignalNode("S3","S3"); // secondary exit
+    static void testJunctionTrailingFromDivergingDerailsWhenInactive() {
+        model.SignalNode facing = new model.SignalNode("F","Facing");
+        model.SignalNode diverging = new model.SignalNode("D","Diverging");
         model.JunctionNode jct = new model.JunctionNode(
-            "JCT","Junction",
-            enums.JunctionDirection.LEFT,
-            s2.getId(),   // primary
-            s3.getId());  // secondary
-        jct.setState(false);  // primary route set
+            "JCT", "Junction", facing.getId(), diverging.getId());
+        jct.setState(false);
 
-        // Tracks: S1 -[T1]-> JCT -[T2_PRI]-> S2
-        //                     JCT -[T2_SEC]-> S3
-        model.Track t1    = new model.Track("T1","T1", s1, jct, 100, 10, 30);
-        model.Track t2pri = new model.Track("T2P","T2P", jct, s2, 100, 10, 30);
-        model.Track t2sec = new model.Track("T2S","T2S", jct, s3, 100, 10, 30);
+        model.Track in = new model.Track("IN_D","IN_D",
+            diverging, jct, 100, 10, 30);
+        model.Track out = new model.Track("OUT_F","OUT_F",
+            jct, facing, 100, 10, 30);
+        model.TrackTraversal tv = new model.TrackTraversal(
+            in, enums.Direction.FORWARD);
 
-        core.GraphBuilder g = new core.GraphBuilder();
-        g.addTrack(t1);
-        g.addTrack(t2pri);
-        g.addTrack(t2sec);
-
-        // Train going to S2 (primary) — should succeed
-        model.Train train = new model.Train("TR","Train",
+        model.Train train = new model.Train("TRD", "TrainD",
             enums.TrainType.PASSENGER, model.TrainPriority.EXPRESS,
-            null, "S1", "S2", 0,
+            null, diverging.getId(), facing.getId(), 0,
             java.time.LocalDateTime.now(),
             java.time.LocalDateTime.now().plusHours(1));
-        core.PathFinder pf = new core.PathFinder(train, g);
-        java.util.List<model.TrackTraversal> path = pf.findPath();
 
-        // Path must use T2P (primary), not T2S (secondary)
-        boolean usedPrimary = path.size() == 2
-            && path.get(1).getTrack().getId().equals("T2P");
-        printResult("testJunctionStatePrimaryRoute", usedPrimary);
+        core.ConflictDetector cd = new core.ConflictDetector();
+        boolean safe = cd.check(in, out, tv, jct, train);
+        printResult("testJunctionTrailingFromDivergingDerailsWhenInactive",
+            !safe);
     }
 
     // -- TEST 24 ------------------------------
-    static void testJunctionStateSecondaryRoute() {
-        // LEFT junction: state=true → train must go via secondaryNodeId
-
-        model.SignalNode s1 = new model.SignalNode("S1","S1");
-        model.SignalNode s2 = new model.SignalNode("S2","S2"); // primary
-        model.SignalNode s3 = new model.SignalNode("S3","S3"); // secondary
+    static void testJunctionTrailingFromStraightDerailsWhenActive() {
+        model.SignalNode facing = new model.SignalNode("F2","Facing2");
+        model.SignalNode straight = new model.SignalNode("S2","Straight2");
+        model.SignalNode diverging = new model.SignalNode("D2","Diverging2");
         model.JunctionNode jct = new model.JunctionNode(
-            "JCT","Junction",
-            enums.JunctionDirection.LEFT,
-            s2.getId(),
-            s3.getId());
-        jct.setState(true);  // secondary route set
+            "JCT2", "Junction2", facing.getId(), diverging.getId());
+        jct.setState(true);
 
-        model.Track t1    = new model.Track("T1","T1", s1, jct, 100, 10, 30);
-        model.Track t2pri = new model.Track("T2P","T2P", jct, s2, 100, 10, 30);
-        model.Track t2sec = new model.Track("T2S","T2S", jct, s3, 100, 10, 30);
+        model.Track in = new model.Track("IN_S","IN_S",
+            straight, jct, 100, 10, 30);
+        model.Track out = new model.Track("OUT_F2","OUT_F2",
+            jct, facing, 100, 10, 30);
+        model.TrackTraversal tv = new model.TrackTraversal(
+            in, enums.Direction.FORWARD);
 
-        core.GraphBuilder g = new core.GraphBuilder();
-        g.addTrack(t1);
-        g.addTrack(t2pri);
-        g.addTrack(t2sec);
-
-        // Train going to S3 (secondary) — should succeed
-        model.Train train = new model.Train("TR","Train",
+        model.Train train = new model.Train("TRS", "TrainS",
             enums.TrainType.PASSENGER, model.TrainPriority.EXPRESS,
-            null, "S1", "S3", 0,
+            null, straight.getId(), facing.getId(), 0,
             java.time.LocalDateTime.now(),
             java.time.LocalDateTime.now().plusHours(1));
-        core.PathFinder pf = new core.PathFinder(train, g);
-        java.util.List<model.TrackTraversal> path = pf.findPath();
 
-        // Path must use T2S (secondary), not T2P (primary)
-        boolean usedSecondary = path.size() == 2
-            && path.get(1).getTrack().getId().equals("T2S");
-        printResult("testJunctionStateSecondaryRoute", usedSecondary);
+        core.ConflictDetector cd = new core.ConflictDetector();
+        boolean safe = cd.check(in, out, tv, jct, train);
+        printResult("testJunctionTrailingFromStraightDerailsWhenActive",
+            !safe);
+    }
+
+    // -- TEST 25 ------------------------------
+    static void testJunctionFacingMovementRoutesByState() {
+        model.SignalNode facing = new model.SignalNode("F3", "Facing3");
+        model.SignalNode straight = new model.SignalNode("S3", "Straight3");
+        model.SignalNode diverging = new model.SignalNode("D3", "Diverging3");
+        model.JunctionNode jct = new model.JunctionNode(
+            "JCT3", "Junction3", facing.getId(), diverging.getId());
+
+        model.Track in = new model.Track("IN_F", "IN_F",
+            facing, jct, 100, 10, 30);
+        model.Track outStraight = new model.Track("OUT_S", "OUT_S",
+            jct, straight, 100, 10, 30);
+        model.Track outDiverging = new model.Track("OUT_D", "OUT_D",
+            jct, diverging, 100, 10, 30);
+
+        core.GraphBuilder g = new core.GraphBuilder();
+        g.addTrack(in);
+        g.addTrack(outStraight);
+        g.addTrack(outDiverging);
+
+        jct.setState(false);
+        model.Train toStraight = new model.Train("TRF1", "FacingToStraight",
+            enums.TrainType.PASSENGER, model.TrainPriority.EXPRESS,
+            null, facing.getId(), straight.getId(), 0,
+            java.time.LocalDateTime.now(),
+            java.time.LocalDateTime.now().plusHours(1));
+        java.util.List<model.TrackTraversal> pathStraight =
+            new core.PathFinder(toStraight, g).findPath();
+
+        jct.setState(true);
+        model.Train toDiverging = new model.Train("TRF2", "FacingToDiverging",
+            enums.TrainType.PASSENGER, model.TrainPriority.EXPRESS,
+            null, facing.getId(), diverging.getId(), 0,
+            java.time.LocalDateTime.now(),
+            java.time.LocalDateTime.now().plusHours(1));
+        java.util.List<model.TrackTraversal> pathDiverging =
+            new core.PathFinder(toDiverging, g).findPath();
+
+        boolean pass = pathStraight.size() == 2
+            && pathStraight.get(1).getTrack().getId().equals("OUT_S")
+            && pathDiverging.size() == 2
+            && pathDiverging.get(1).getTrack().getId().equals("OUT_D");
+
+        printResult("testJunctionFacingMovementRoutesByState", pass);
     }
 
     // -- TEST 21 ------------------------------
