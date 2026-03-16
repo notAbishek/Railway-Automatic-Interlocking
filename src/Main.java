@@ -162,6 +162,9 @@ public class Main {
                         + " [" + traversal.getDirection() + "]");
                     conflictDetector.onTrackExit(train, track, junction);
                     System.out.println("  EXIT:  " + track.getId());
+                    if (signal != null) {
+                        signalController.setRed(signal, graph);
+                    }
                 } else {
                     if (signal != null) {
                         signalController.setRed(signal, graph);

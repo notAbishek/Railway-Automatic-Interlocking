@@ -109,8 +109,7 @@ public class DependencyResolver {
             }
 
             List<String> shuntingMoves =
-                shuntingResolver.resolve(currentPositions,
-                                          goalPositions, graph);
+                shuntingResolver.resolve(currentPositions, goalPositions, graph);
             if (shuntingMoves.isEmpty()) {
                 System.out.println("UNRESOLVABLE DEADLOCK — "
                     + "all signals RED — manual intervention required");
